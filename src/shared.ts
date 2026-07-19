@@ -163,16 +163,6 @@ const RESTORE_ICON: IconSpec = {
     { tag: "path", attrs: { d: "M16 21v-3a2 2 0 0 1 2-2h3" } },
   ],
 };
-const EXPAND_ICON: IconSpec = {
-  attrs: STROKE_ATTRS,
-  shapes: [
-    { tag: "path", attrs: { d: "M8 3H5a2 2 0 0 0-2 2v3" } },
-    { tag: "path", attrs: { d: "M21 8V5a2 2 0 0 0-2-2h-3" } },
-    { tag: "path", attrs: { d: "M3 16v3a2 2 0 0 0 2 2h3" } },
-    { tag: "path", attrs: { d: "M16 21h3a2 2 0 0 0 2-2v-3" } },
-  ],
-};
-
 // Build an icon's SVG element with DOM APIs (no string parsing — CSP-safe).
 function buildIcon(doc: Document, spec: IconSpec): SVGElement {
   const svg = doc.createElementNS(SVG_NS, "svg");
@@ -318,7 +308,7 @@ export function mountPlayerControls(config: PlayerControlsConfig): void {
 
   const container = document.createElement("div");
   container.id = "stream-channeler-controls";
-  container.style.cssText = `position:fixed;top:12px;left:12px;z-index:2147483647;display:flex;gap:8px;opacity:${CONTROLS_RESTING_OPACITY};transition:opacity 0.2s ease;`;
+  container.style.cssText = `position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;opacity:${CONTROLS_RESTING_OPACITY};transition:opacity 0.2s ease;`;
   container.addEventListener("mouseenter", () => {
     container.style.opacity = "1";
   });
@@ -340,19 +330,12 @@ export function mountPlayerControls(config: PlayerControlsConfig): void {
     },
   );
 
-  // Toggle the fake fullscreen; the icon/label flip to reflect the next action.
+  // Restore control: only shown while the video is expanded. Once the video is
+  // back at its original size there's no button (no separate expand control).
   const restoreLabel = config.restoreLabel ?? "Restore Original Size";
   let toggleButton: HTMLButtonElement;
   const updateToggle = (): void => {
-    const expanded = config.isExpanded();
-    const label = expanded ? restoreLabel : "Expand Video";
-    toggleButton.title = label;
-    setButtonContent(
-      document,
-      toggleButton,
-      expanded ? RESTORE_ICON : EXPAND_ICON,
-      label,
-    );
+    toggleButton.style.display = config.isExpanded() ? "" : "none";
   };
   toggleButton = createOverlayButton(
     document,
