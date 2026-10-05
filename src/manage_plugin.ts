@@ -11,7 +11,13 @@ export interface ManagePluginConfig {
   website_name: string;
   buttonColor: string;
   textColor?: string;
+  /** Pages to show the UI on, tested against `location.pathname`. */
   urlRegex?: RegExp;
+  /**
+   * Custom page check, for sites where the title is identified by more than the
+   * path (e.g. a query string). Takes precedence over `urlRegex`.
+   */
+  isValidPage?: () => boolean;
   /** A selector to wait for before trying to insert the UI. */
   waitSelector: string;
   /** Returns the URL to queue when the user clicks "Add to Channel". */
@@ -34,7 +40,7 @@ const INPUT_STYLE =
 
 export function initManagePlugin(config: ManagePluginConfig): void {
   const LOG = `[Stream Channeler Remote] [${config.website_name}]`;
-  const containerId = `manage-${config.website_name.toLowerCase()}-container`;
+  const containerId = `manage-${config.website_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-container`;
   const textColor = config.textColor ?? "#fff";
 
   // Tracks the user dismissing the footer. Intentionally not persisted — the
@@ -204,6 +210,7 @@ export function initManagePlugin(config: ManagePluginConfig): void {
   }
 
   function isValidPage(): boolean {
+    if (config.isValidPage) return config.isValidPage();
     return !config.urlRegex || config.urlRegex.test(location.pathname);
   }
 

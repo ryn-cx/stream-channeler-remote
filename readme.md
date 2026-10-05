@@ -2,8 +2,8 @@
 
 A companion UserScript for [Stream Channeler](https://streamchanneler.com) that adds two features:
 
-- **Playback** - Automatically plays through episodes in a channel sequentially, detecting when each episode ends and advancing to the next one. Supports YouTube, NHK World, Crunchyroll, HBO Max, Netflix, Hulu, Prime Video, Disney+, Paramount+, Peacock, Adult Swim, HiDive, Tubi, Pluto TV, and The Roku Channel.
-- **Manage** - Assists in building channels by letting you queue shows from TMDB, Crunchyroll, and YouTube, then bulk import them into Stream Channeler.
+- **Playback** - Automatically plays through episodes in a channel sequentially, detecting when each episode ends and advancing to the next one.
+- **Manage** - Assists in building channels by letting you queue shows while browsing supported sites, then bulk import them into Stream Channeler.
 
 ## Install
 
@@ -17,27 +17,27 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 | Site             | Autoplay | Fullscreen | Add to Channel |
 | ---------------- | -------- | ---------- | -------------- |
 | YouTube          | ✅       | ✅         | ✅             |
-| NHK World        | ✅       | ✅         | ❌             |
+| NHK World        | ✅       | ✅         | ✅             |
 | Crunchyroll      | ✅       | ✅         | ✅             |
-| HBO Max          | ✅       | ❌         | ❌             |
-| Netflix          | ✅       | ❌         | ❌             |
-| Hulu             | ✅       | ✅         | ❌             |
-| Prime Video      | ✅       | ✅         | ❌             |
-| Disney+          | ✅       | ✅         | ❌             |
-| Paramount+       | ✅       | ✅         | ❌             |
-| Peacock          | ✅       | ❌         | ❌             |
-| Adult Swim       | ✅       | ✅         | ❌             |
-| HiDive           | ✅       | ✅         | ❌             |
-| Tubi             | ✅       | ✅         | ❌             |
-| Pluto TV         | ✅       | ✅         | ❌             |
-| The Roku Channel | ✅       | ✅         | ❌             |
+| HBO Max          | ✅       | ✅         | ✅             |
+| Netflix          | ✅       | ✅         | ✅             |
+| Hulu             | ✅       | ✅         | ✅             |
+| Prime Video      | ✅       | ✅         | ✅             |
+| Disney+          | ✅       | ✅         | ✅             |
+| Paramount+       | ✅       | ✅         | ✅             |
+| Peacock          | ✅       | ✅         | ✅             |
+| Adult Swim       | ✅       | ✅         | ✅             |
+| HiDive           | ✅       | ✅         | ✅             |
+| Tubi             | ✅       | ✅         | ✅             |
+| Pluto TV         | ✅       | ✅         | ✅             |
+| The Roku Channel | ✅       | ✅         | ✅             |
 | TMDB             | N/A      | N/A        | ✅             |
 
 ## Usage
 
 ### Playback
 
-1. Go to a channel on [streamchanneler.com](https://streamchanneler.com)
+1. Open a channel on [streamchanneler.com](https://streamchanneler.com)
 2. Click **Start Remote**
 3. Episodes will open, play, and advance automatically
 
@@ -45,7 +45,7 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 
 1. Go to the [channels page](https://streamchanneler.com/channels) and open the **Bulk Import** modal
 2. Click **Load Channels** to load your channel list
-3. Browse shows on [TMDB](https://www.themoviedb.org) and use the **Add to Channel** button to queue them
+3. Browse to a show or movie on any site with **Add to Channel** in the table above and use the **Add to Channel** button to queue it
 4. Return to the Bulk Import modal and click **Insert URLs** to populate the import field
 
 ## Development

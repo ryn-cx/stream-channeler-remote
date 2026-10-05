@@ -479,18 +479,98 @@ export function watchUrlChange(log: string): void {
 }
 
 /**
- * Generic plugin for sites where episode end is detected by URL change, with the
- * floating stop button.
+ * Generic plugin for sites where episode end is detected by URL change. When
+ * `playerSelectors` is given, the player is also fake-fullscreened with the
+ * overlay controls; otherwise only the floating stop button is shown.
  */
-export function initUrlChangePlugin(name: string): void {
+export function initUrlChangePlugin(
+  name: string,
+  playerSelectors?: string[],
+): void {
   const LOG = `${REMOTE_LOG} [${name}]`;
   // Only run the script if the tab was opened by Stream Channeler Remote.
   const loading = GM_getValue("loadingTab", false);
   if (!loading) return;
   GM_setValue("loadingTab", false);
 
-  createStopButton();
   watchUrlChange(LOG);
+  if (!playerSelectors) {
+    createStopButton();
+    return;
+  }
+  waitForElement<HTMLVideoElement>("video")
+    .then((video) => expandPlayer(LOG, video, playerSelectors))
+    .catch((error: unknown) => {
+      console.warn(`${LOG} No video found; showing stop button only:`, error);
+      createStopButton();
+    });
+}
+
+// Climb from the <video> while each parent is still the same size as the video.
+// Sites usually overlay their controls on a wrapper exactly the video's size, so
+// the outermost such wrapper takes the controls into fullscreen with it.
+function findSameSizeWrapper(video: HTMLElement): HTMLElement {
+  const SIZE_TOLERANCE_PX = 4;
+  const rect = video.getBoundingClientRect();
+  let wrapper: HTMLElement = video;
+  for (
+    let el = video.parentElement;
+    el && el !== document.body && el !== document.documentElement;
+    el = el.parentElement
+  ) {
+    const elRect = el.getBoundingClientRect();
+    if (
+      Math.abs(elRect.width - rect.width) > SIZE_TOLERANCE_PX ||
+      Math.abs(elRect.height - rect.height) > SIZE_TOLERANCE_PX
+    ) {
+      break;
+    }
+    wrapper = el;
+  }
+  return wrapper === video ? (video.parentElement ?? video) : wrapper;
+}
+
+/**
+ * Fake-fullscreen the wrapper that holds the site's own controls (not the bare
+ * <video>, or the controls are left behind on the page) and mount the overlay
+ * controls. `playerSelectors` are tried in order via `video.closest()`; when none
+ * match, the outermost wrapper the same size as the video is used.
+ */
+export async function expandPlayer(
+  log: string,
+  video: HTMLElement,
+  playerSelectors: string[] = [],
+): Promise<void> {
+  let player: HTMLElement | null = null;
+  for (const selector of playerSelectors) {
+    player = video.closest<HTMLElement>(selector);
+    if (player) break;
+  }
+  player ??= findSameSizeWrapper(video);
+  const target = player;
+  console.log(
+    `${log} Fullscreen target: <${target.tagName.toLowerCase()} class="${target.className}">`,
+  );
+
+  try {
+    mountPlayerControls({
+      log,
+      isExpanded: () => target.classList.contains(FAKE_FULLSCREEN_CLASS),
+      toggleExpand: () =>
+        setFakeFullscreen(
+          target,
+          !target.classList.contains(FAKE_FULLSCREEN_CLASS),
+        ),
+      expandObserveTarget: target,
+    });
+    // These players keep restyling themselves while they lay out after load, so
+    // wait for that to settle or our fullscreen styles get overwritten.
+    await waitForQuiet(target);
+    setFakeFullscreen(target, true);
+    console.log(`${log} Fullscreen applied`);
+  } catch (error) {
+    console.error(`${log} Controls/fullscreen setup failed:`, error);
+  }
 }
 
 export interface VideoPluginConfig {
@@ -500,7 +580,7 @@ export interface VideoPluginConfig {
    * Candidate selectors for the site's player wrapper — the element that holds
    * both the <video> and the site's own controls. Tried in order via
    * `video.closest()`; the first hit is what gets fake-fullscreened. Falls back
-   * to the video's parent when none match.
+   * to the outermost wrapper the same size as the video when none match.
    */
   playerSelectors?: string[];
   /** Selector for the <video> element. Defaults to any video on the page. */
@@ -551,40 +631,7 @@ export async function initVideoPlugin(
     return;
   }
 
-  // Fullscreen the wrapper that holds the site's own controls, not the bare
-  // <video> — otherwise the controls are left behind on the page.
-  let player: HTMLElement = video;
-  for (const selector of config.playerSelectors ?? []) {
-    const match = video.closest<HTMLElement>(selector);
-    if (match) {
-      player = match;
-      break;
-    }
-  }
-  if (player === video) player = video.parentElement ?? video;
-  console.log(
-    `${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`,
-  );
-
-  try {
-    mountPlayerControls({
-      log: LOG,
-      isExpanded: () => player.classList.contains(FAKE_FULLSCREEN_CLASS),
-      toggleExpand: () =>
-        setFakeFullscreen(
-          player,
-          !player.classList.contains(FAKE_FULLSCREEN_CLASS),
-        ),
-      expandObserveTarget: player,
-    });
-    // These players keep restyling themselves while they lay out after load, so
-    // wait for that to settle or our fullscreen styles get overwritten.
-    await waitForQuiet(player);
-    setFakeFullscreen(player, true);
-    console.log(`${LOG} Fullscreen applied`);
-  } catch (error) {
-    console.error(`${LOG} Controls/fullscreen setup failed:`, error);
-  }
+  await expandPlayer(LOG, video, config.playerSelectors);
 
   if (config.autoplay ?? true) {
     const current = document.querySelector<HTMLVideoElement>(videoSelector);

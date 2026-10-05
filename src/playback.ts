@@ -70,29 +70,12 @@ function updateButton(): void {
   button.innerHTML = `${icon}${action} (${counter})`;
 }
 
-function extractEpisodeInfo(card: HTMLElement): void {
-  const text = card.textContent ?? "";
-
-  const epMatch = text.match(/Episode(?:\s*:)?\s*(\d+)/i);
-  GM_setValue("episodeNumber", epMatch ? parseInt(epMatch[1], 10) : null);
-
-  const seasonMatch = text.match(/Season(?:\s*:)?\s*(\d+)/i);
-  GM_setValue(
-    "seasonNumber",
-    seasonMatch ? parseInt(seasonMatch[1], 10) : null,
-  );
-}
-
 function clickCurrentCard(): void {
   // If all videos have been played stop remote.
   if (currentIndex >= cards.length) {
     stopRemote();
     return;
   }
-
-  // Extract season/episode info from the card and store as GM values
-  // so plugins on show pages can select the correct episode.
-  extractEpisodeInfo(cards[currentIndex]);
 
   // loadingTab is used to make sure the script only activates on the specific tabs
   // that it opens.
