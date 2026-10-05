@@ -37,7 +37,7 @@
 // @match         https://www.youtube.com/channel/*
 // @match         https://www.youtube.com/c/*
 // @match         https://www.youtube.com/user/*
-// @source        https://github.com/ryn-cx/stream-channeler-tuner
+// @source        https://github.com/ryn-cx/stream-channeler-remote
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @grant         GM_addValueChangeListener
