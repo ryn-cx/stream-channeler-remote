@@ -8,14 +8,15 @@
 // @match         https://streamchanneler.com/channels/*
 // @match         http://localhost:5173/*
 // @match         https://www.adultswim.com/videos/*
+// @match         https://www.crunchyroll.com/watch/*
 // @match         https://www.disneyplus.com/play/*
 // @match         https://www.disneyplus.com/*/video/*
 // @match         https://play.hbomax.com/video/watch/*
-// @match         https://play.hbomax.com/show/*
 // @match         https://www.hidive.com/video/*
 // @match         https://www.hidive.com/stream/*
 // @match         https://www.hulu.com/watch/*
 // @match         https://www3.nhk.or.jp/nhkworld/en/shows/*
+// @match         https://www.netflix.com/watch/*
 // @match         https://www.paramountplus.com/shows/video/*
 // @match         https://www.paramountplus.com/movies/video/*
 // @match         https://www.peacocktv.com/watch/*
@@ -27,12 +28,29 @@
 // @match         https://tubitv.com/movies/*
 // @match         https://tubitv.com/tv-shows/*
 // @match         https://tubitv.com/series/*
-// @match         https://www.crunchyroll.com/watch/*
-// @match         https://www.netflix.com/*
 // @match         https://www.youtube.com/watch*
+// @match         https://www.crunchyroll.com/series/*
+// @match         https://www.disneyplus.com/browse/*
+// @match         https://www.disneyplus.com/*/browse/*
+// @match         https://play.hbomax.com/*
+// @match         https://www.hbomax.com/shows/*
+// @match         https://www.hbomax.com/movies/*
+// @match         https://www.hidive.com/series/*
+// @match         https://www.hidive.com/season/*
+// @match         https://www.hulu.com/series/*
+// @match         https://www.hulu.com/movie/*
+// @match         https://www.netflix.com/title/*
+// @match         https://www.netflix.com/browse*
+// @match         https://www.paramountplus.com/shows/*
+// @match         https://www.peacocktv.com/watch/asset/*
+// @match         https://pluto.tv/*/on-demand/series/*
+// @match         https://pluto.tv/*/on-demand/movies/*
+// @match         https://pluto.tv/*/shows/*
+// @match         https://pluto.tv/*/movies/*
+// @match         https://www.amazon.com/gp/video/detail/*
 // @match         https://www.themoviedb.org/tv/*
 // @match         https://www.themoviedb.org/movie/*
-// @match         https://www.crunchyroll.com/series/*
+// @match         https://therokuchannel.roku.com/details/*
 // @match         https://www.youtube.com/@*
 // @match         https://www.youtube.com/channel/*
 // @match         https://www.youtube.com/c/*
@@ -214,6 +232,237 @@ function initManage() {
 
 /***/ },
 
+/***/ "./src/manage/Adult Swim/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Adult Swim/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Show pages look like /videos/metalocalypse; episode pages add the episode slug
+// (/videos/toonami/the-return-episode-1), so require the show slug to end the
+// path. Shows can also be linked as /rick-and-morty, so stored URLs of either
+// form are matched by the show slug.
+const SHOW_PATH_RE = /^\/videos\/[a-z0-9-]+\/?$/;
+const SHOW_SLUG_RE = /adultswim\.com\/(?:videos\/)?([a-z0-9-]+)\/?(?:[?#]|$)/;
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Adult Swim",
+        buttonColor: "#000000",
+        urlRegex: SHOW_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => url.match(SHOW_SLUG_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Crunchyroll/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Crunchyroll/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Crunchyroll series URLs look like /series/GT00375170/the-food-diary-of-miss-maid.
+// Match by series ID so the highlight survives slug or trailing-slash differences
+// between the page URL and the URL stored against a channel.
+const SERIES_ID_RE = /\/series\/([A-Z0-9]+)/;
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Crunchyroll",
+        buttonColor: "#000000",
+        urlRegex: /\/series\/[A-Z0-9]+/,
+        waitSelector: "h1",
+        getCurrentUrl: () => location.href,
+        getMatchKey: (url) => url.match(SERIES_ID_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Disney+/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Disney+/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// Series and movies share one page format, with an optional locale segment, e.g.
+//   https://www.disneyplus.com/browse/entity-cac75c8f-a9e2-4d95-ac73-1cf1cc7b9568
+//   https://www.disneyplus.com/en-gb/browse/entity-3135b0cb-a002-438d-a9fd-60d86284c93f
+const TITLE_PATH_RE = new RegExp(`^(?:/[a-z]{2}(?:-[a-z]{2})?)?/browse/entity-${UUID}/?$`);
+const TITLE_ID_RE = new RegExp(`/browse/entity-(${UUID})`);
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Disney+",
+        buttonColor: "#0063e5",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/HBO Max/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/HBO Max/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// Title pages put a media type in front of the id, optionally followed by a
+// decorative slug and season, e.g.
+//   https://play.hbomax.com/show/ab553cdc-e15d-4597-b65f-bec9201fd2dd
+//   https://play.hbomax.com/mini-series/396999a6-3fff-4af3-802b-10c46d10deff
+//   https://play.hbomax.com/movie/4ee4f57e-19bd-493f-96f9-ad3e753af981
+//   https://www.hbomax.com/shows/rick-and-morty/s2/ab553cdc-e15d-4597-b65f-bec9201fd2dd
+// Watch pages (/video/watch/<id>/<id>) are episodes, not titles.
+const TITLE_PATH_RE = new RegExp(`^/(?!video/)[a-z-]+/(?:[a-z0-9-]+/)?(?:s\\d+/)?${UUID}/?$`);
+const TITLE_ID_RE = new RegExp(`/(${UUID})/?(?:[?#]|$)`);
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "HBO Max",
+        buttonColor: "#002be7",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/HiDive/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/HiDive/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Series, seasons and movies are keyed by number, e.g.
+//   https://www.hidive.com/series/1286
+//   https://www.hidive.com/season/20022
+//   https://www.hidive.com/video/586784
+// HiDive also uses /video/<id> for individual episodes, which the importer
+// can't import yet, but there's no telling them apart from the URL.
+const TITLE_PATH_RE = /^\/(?:series|season|video)\/\d+\/?$/;
+// A season page names its series (/season/36178?seriesId=4083), and the series
+// is what the importer reads it as, so match it by the series.
+function extractTitleKey(url) {
+    const seriesId = url.match(/[?&]seriesId=(\d+)/)?.[1];
+    if (seriesId)
+        return `series/${seriesId}`;
+    const match = url.match(/\/(series|season|video)\/(\d+)/);
+    return match ? `${match[1]}/${match[2]}` : null;
+}
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "HiDive",
+        buttonColor: "#00aeef",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        // Keep the query string so a season's seriesId is queued with it.
+        getCurrentUrl: () => `${location.origin}${location.pathname}${location.search}`,
+        getMatchKey: extractTitleKey,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Hulu/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Hulu/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// The slug in front of the id is optional, e.g.
+//   https://www.hulu.com/series/7117a15d-128c-4c2b-a5b9-98adfa0f4505
+//   https://www.hulu.com/series/chad-powers-7117a15d-128c-4c2b-a5b9-98adfa0f4505
+//   https://www.hulu.com/movie/the-devil-wears-prada-2-34bc6b99-813f-4d5d-bbe7-f3099b45879b
+const TITLE_PATH_RE = new RegExp(`^/(?:series|movie)/(?:[a-z0-9-]+-)?${UUID}/?$`);
+const TITLE_ID_RE = new RegExp(`/(?:series|movie)/(?:[a-z0-9-]+-)?(${UUID})`);
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Hulu",
+        buttonColor: "#1ce783",
+        textColor: "#000000",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
 /***/ "./src/manage/NHK World/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -246,6 +495,221 @@ function init() {
         waitSelector: ".pProgramHero__main",
         getCurrentUrl: () => location.href,
         getMatchKey: (url) => url.match(SLUG_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Netflix/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Netflix/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Titles have their own page at /title/80240027, but browsing usually opens the
+// title as a modal over /browse with its id in the query string
+// (/browse?jbv=80240027), so both are recognised and queued as /title/<id>.
+const TITLE_PATH_RE = /^\/title\/(\d+)\/?$/;
+const TITLE_ID_RE = /\/title\/(\d+)/;
+function currentTitleId() {
+    return (location.pathname.match(TITLE_PATH_RE)?.[1] ??
+        new URLSearchParams(location.search).get("jbv"));
+}
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Netflix",
+        buttonColor: "#e50914",
+        isValidPage: () => currentTitleId() !== null,
+        waitSelector: "body",
+        getCurrentUrl: () => {
+            const id = currentTitleId();
+            return id ? `https://www.netflix.com/title/${id}` : location.href;
+        },
+        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Paramount+/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Paramount+/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Series are keyed by slug and movies by content id, e.g.
+//   https://www.paramountplus.com/shows/south-park/
+//   https://www.paramountplus.com/movies/video/ALVE01KT235XQDEK58R7H2012VNZMK/
+// Episode pages live under /shows/video/, which isn't a series slug.
+const TITLE_PATH_RE = /^\/(?:shows\/(?!video\/?$)[a-z0-9_-]+|movies\/video\/[A-Za-z0-9_]+)\/?$/;
+const TITLE_KEY_RE = /\/(shows\/(?!video\/)[a-z0-9_-]+|movies\/video\/[A-Za-z0-9_]+)(?:[/?#]|$)/;
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Paramount+",
+        buttonColor: "#0064ff",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => url.match(TITLE_KEY_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Peacock/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Peacock/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+// A series is keyed by a long number, a movie (and a few series) by a UUID.
+const TITLE_KEY = `(?:${UUID}|\\d+)`;
+// The section, genre and name segments in front of the id are decorative, e.g.
+//   https://www.peacocktv.com/watch/asset/tv/the-office/4902514835143843112
+//   https://www.peacocktv.com/watch/asset/movies/romance/renegade/06145283-20dc-3916-a072-e0c00daaa8e6
+// Episode pages continue with /seasons/<n>/episodes/..., so require the id to
+// end the path.
+const TITLE_PATH_RE = new RegExp(`^/watch/asset(?:/[^/]+){2,3}/${TITLE_KEY}/?$`);
+const TITLE_KEY_RE = new RegExp(`/watch/asset(?:/[^/?#]+){2,3}/(${TITLE_KEY})(?:[/?#]|$)`);
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Peacock",
+        buttonColor: "#000000",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => url.match(TITLE_KEY_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Pluto TV/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Pluto TV/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Every page sits under a locale segment, e.g.
+//   https://pluto.tv/en/on-demand/series/5ef05c6acdce3c001a779a79/details
+//   https://pluto.tv/us/on-demand/series/5ef05c6acdce3c001a779a79/season/1
+//   https://pluto.tv/en/on-demand/movies/68a54f49df1220b53566f16e/details
+//   https://pluto.tv/us/movies/68a54f49df1220b53566f16e/
+//   https://pluto.tv/us/shows/washed/
+// Season and episode pages are read as their series.
+const LOCALE = "(?:/[a-z]{2}(?:-[a-z]{2})?)?";
+const ITEM_ID = "[0-9a-f]{24}";
+const TITLE_PATH_RE = new RegExp(`^${LOCALE}(?:` +
+    `/on-demand/series/${ITEM_ID}(?:/season/\\d+(?:/episode/${ITEM_ID})?)?(?:/details)?` +
+    `|(?:/on-demand)?/movies/${ITEM_ID}(?:/details)?` +
+    `|/shows/[a-z0-9-]+` +
+    `)/?$`);
+const TITLE_KEY_RE = new RegExp(`/(?:(?:on-demand/)?(?:series|movies)/(${ITEM_ID})|shows/([a-z0-9-]+))`);
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Pluto TV",
+        buttonColor: "#fff200",
+        textColor: "#000000",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => {
+            const match = url.match(TITLE_KEY_RE);
+            return match?.[1] ?? match?.[2] ?? null;
+        },
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Prime Video/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Prime Video/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Title pages, optionally with a region prefix, a decorative name segment and a
+// trailing ref, e.g.
+//   https://www.primevideo.com/detail/0GTKUFQSFLP1YVFDMW9IR56I90
+//   https://www.primevideo.com/region/eu/detail/The-Boys/0KRGHGZCHKS920ZQGY5LBRF7MA/ref=atv_sr
+//   https://www.amazon.com/gp/video/detail/B0D9MYVLNM
+// Amazon's generic /dp/<id> product pages aren't included, since every product
+// on amazon.com uses them, not just videos.
+const TITLE_ID_RE = /\/detail\/(?:[^/?#]+\/)?([A-Z0-9]{10,})(?:[/?#]|$)/;
+function currentTitleUrl() {
+    const id = location.pathname.match(TITLE_ID_RE)?.[1];
+    if (!id)
+        return null;
+    // Queue the plain title URL the importer recognises, without the decorative
+    // name, region or ref segments.
+    return location.hostname.includes("amazon.com")
+        ? `https://www.amazon.com/gp/video/detail/${id}`
+        : `https://www.primevideo.com/detail/${id}`;
+}
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Prime Video",
+        buttonColor: "#00a8e1",
+        isValidPage: () => currentTitleUrl() !== null,
+        waitSelector: "body",
+        getCurrentUrl: () => currentTitleUrl() ?? location.href,
+        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
     });
 }
 
@@ -300,7 +764,7 @@ function init() {
 
 /***/ },
 
-/***/ "./src/manage/crunchyroll/index.ts"
+/***/ "./src/manage/The Roku Channel/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -311,30 +775,31 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/crunchyroll/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/The Roku Channel/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
 
-// Crunchyroll series URLs look like /series/GT00375170/the-food-diary-of-miss-maid.
-// Match by series ID so the highlight survives slug or trailing-slash differences
-// between the page URL and the URL stored against a channel.
-const SERIES_ID_RE = /\/series\/([A-Z0-9]+)/;
+// Series and movies share one page format; the slug after the id is decorative,
+// and a season appends its number to the id, e.g.
+//   https://therokuchannel.roku.com/details/db1607f1cff2522bb795382bb4b5bcae/fawlty-towers
+const TITLE_PATH_RE = /^\/details\/[0-9a-f]{32}(?:-\d+)?(?:\/[^/]+)?\/?$/;
+const TITLE_ID_RE = /\/(?:details|watch)\/([0-9a-f]{32}(?:-\d+)?)/;
 function init() {
     (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
-        website_name: "Crunchyroll",
-        buttonColor: "#000000",
-        urlRegex: /\/series\/[A-Z0-9]+/,
-        waitSelector: "h1",
-        getCurrentUrl: () => location.href,
-        getMatchKey: (url) => url.match(SERIES_ID_RE)?.[1] ?? null,
+        website_name: "The Roku Channel",
+        buttonColor: "#6c3c97",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
     });
 }
 
 
 /***/ },
 
-/***/ "./src/manage/youtube/index.ts"
+/***/ "./src/manage/Tubi/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -345,7 +810,45 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/youtube/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Tubi/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Series and movies are keyed by number, followed by an optional slug, e.g.
+//   https://tubitv.com/series/300006854/scooby-doo-where-are-you
+//   https://tubitv.com/movies/100029837/megamind
+const TITLE_PATH_RE = /^\/(?:series|movies)\/\d+(?:\/[^/]*)?\/?$/;
+const TITLE_KEY_RE = /\/(series|movies)\/(\d+)/;
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Tubi",
+        buttonColor: "#7408ff",
+        urlRegex: TITLE_PATH_RE,
+        waitSelector: "body",
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: (url) => {
+            const match = url.match(TITLE_KEY_RE);
+            return match ? `${match[1]}/${match[2]}` : null;
+        },
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/YouTube/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/YouTube/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
@@ -407,7 +910,7 @@ const SELECT_STYLE = "min-width:180px;padding:6px 10px;border-radius:4px;border:
 const INPUT_STYLE = "width:130px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
 function initManagePlugin(config) {
     const LOG = `[Stream Channeler Remote] [${config.website_name}]`;
-    const containerId = `manage-${config.website_name.toLowerCase()}-container`;
+    const containerId = `manage-${config.website_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-container`;
     const textColor = config.textColor ?? "#fff";
     // Tracks the user dismissing the footer. Intentionally not persisted — the
     // footer reappears on the next page load and whenever the page changes.
@@ -543,6 +1046,8 @@ function initManagePlugin(config) {
         document.getElementById(containerId)?.remove();
     }
     function isValidPage() {
+        if (config.isValidPage)
+            return config.isValidPage();
         return !config.urlRegex || config.urlRegex.test(location.pathname);
     }
     function ensureUI() {
@@ -618,6 +1123,63 @@ function init() {
 
 /***/ },
 
+/***/ "./src/playback/Crunchyroll/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Crunchyroll/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Crunchyroll]`;
+// Crunchyroll uses a native Bitmovin player: a <video id="bitmovinplayer-video-*">
+// inside the ".video-player-wrapper" (which also holds Crunchyroll's controls).
+const VIDEO_SELECTOR = 'video[id^="bitmovinplayer-video"]';
+async function init() {
+    // Only run the script if the tab was opened by Stream Channeler Remote.
+    const loading = GM_getValue("loadingTab", false);
+    if (!loading)
+        return;
+    GM_setValue("loadingTab", false);
+    // Mount the overlay controls (stop + fullscreen toggle) once the player exists,
+    // and auto-expand. Fake-fullscreen the Bitmovin container so its own controls
+    // come along; fall back to the video's parent if the container class differs.
+    try {
+        const video = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(VIDEO_SELECTOR);
+        // Fullscreen the whole player wrapper (which holds Crunchyroll's controls),
+        // not just the video container — otherwise the controls are left behind.
+        const player = video.closest(".video-player-wrapper") ??
+            video.closest("#player-container") ??
+            video.closest(".bitmovinplayer-container") ??
+            video.parentElement ??
+            video;
+        console.log(`${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`);
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .mountPlayerControls */ .Fy)({
+            log: LOG,
+            isExpanded: () => player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK),
+            toggleExpand: () => (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, !player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK)),
+            expandObserveTarget: player,
+        });
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, true);
+    }
+    catch (error) {
+        console.warn(`${LOG} Player not found; controls not mounted:`, error);
+    }
+    // Crunchyroll auto-advances by navigating, so detect the URL change.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .watchUrlChange */ .Jm)(LOG);
+}
+
+
+/***/ },
+
 /***/ "./src/playback/Disney+/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -667,64 +1229,15 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [HBO Max]`;
-// TODO: This code is completely untested it might work.
-async function startVideo() {
-    const season = GM_getValue("seasonNumber", null);
-    const episode = GM_getValue("episodeNumber", null);
-    if (season === null || episode === null) {
-        throw new Error(`${LOG} Missing season/episode info (season=${season}, episode=${episode}). Card may not have valid episode data.`);
-    }
-    const dropdownButton = document.querySelector('[data-testid="generic-show-page-rail-episodes-tabbed-content_dropdown"] button');
-    // Only select a season if there's a dropdown (multi-season show)
-    if (dropdownButton) {
-        const currentSeasonText = dropdownButton.textContent?.trim() ?? "";
-        if (currentSeasonText !== `Season ${season}`) {
-            dropdownButton.click();
-            await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)('[role="option"], [role="menuitem"]');
-            const options = document.querySelectorAll('[role="option"], [role="menuitem"]');
-            const match = Array.from(options).find((option) => option.textContent === `Season ${season}`);
-            if (!match)
-                throw new Error(`${LOG} Could not find Season ${season} in dropdown`);
-            match.click();
-        }
-    }
-    // Wait for the episodes for the chosen season to load then click the correct one.
-    const tileSelector = `a[data-sonic-type="video"][aria-label*="Season ${season}, Episode ${episode}:"]`;
-    const targetTile = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(tileSelector);
-    targetTile.click();
-    // Wait for HBO to navigate to the watch page after clicking the episode
-    await new Promise((resolve) => {
-        const observer = new MutationObserver(() => {
-            if (location.pathname.includes("/video/watch/")) {
-                observer.disconnect();
-                resolve();
-            }
-        });
-        observer.observe(document.querySelector("title") ?? document.head, {
-            childList: true,
-            subtree: true,
-            characterData: true,
-        });
-    });
-    GM_setValue("loadingTab", true);
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("HBO Max");
-}
+// Wrappers that hold both the <video> and HBO Max's own controls. When none
+// match, the outermost wrapper the same size as the video is used.
+const HBO_MAX_PLAYER_SELECTORS = [
+    '[data-testid="player-ux-container"]',
+    '[class*="PlayerContainer"]',
+];
 function init() {
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    // On a watch page, use the standard URL change detection
-    if (location.pathname.includes("/video/watch/")) {
-        GM_setValue("loadingTab", true);
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("HBO Max");
-        return;
-    }
-    // Sometimes the URL just links to the show instead of the specific
-    // episodes so the episode needs to be started manually.
-    startVideo();
+    // HBO Max advances to the next episode by navigating to a new /video/watch/ URL.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("HBO Max", HBO_MAX_PLAYER_SELECTORS);
 }
 
 
@@ -943,6 +1456,36 @@ async function init() {
 
 /***/ },
 
+/***/ "./src/playback/Netflix/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Netflix/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Wrappers that hold both the <video> and Netflix's own controls. When none
+// match, the outermost wrapper the same size as the video is used.
+const NETFLIX_PLAYER_SELECTORS = [
+    ".watch-video--player-view",
+    '[data-uia="watch-video"]',
+];
+function init() {
+    // Netflix advances to the next episode by navigating to a new /watch/ URL.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("Netflix", NETFLIX_PLAYER_SELECTORS);
+}
+
+
+/***/ },
+
 /***/ "./src/playback/Paramount+/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -991,8 +1534,18 @@ __webpack_require__.r(__webpack_exports__);
 
 
 function init() {
-    // Basic implementation: assume Peacock navigates to a new URL when the video ends.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("Peacock");
+    // Peacock advances to the next episode by navigating to a new URL, so the URL
+    // change is the primary end signal; the video's own end is a fallback.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Peacock",
+        // When none match, the outermost wrapper the same size as the video is used.
+        playerSelectors: [
+            '[data-testid="playback-container"]',
+            ".playback-container",
+            '[class*="PlayerContainer"]',
+        ],
+        watchUrl: true,
+    });
 }
 
 
@@ -1124,7 +1677,7 @@ function init() {
 
 /***/ },
 
-/***/ "./src/playback/crunchyroll/index.ts"
+/***/ "./src/playback/YouTube/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -1135,166 +1688,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/crunchyroll/matches.cjs");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
-// TODO: Validate
-
-
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Crunchyroll]`;
-// Crunchyroll uses a native Bitmovin player: a <video id="bitmovinplayer-video-*">
-// inside the ".video-player-wrapper" (which also holds Crunchyroll's controls).
-const VIDEO_SELECTOR = 'video[id^="bitmovinplayer-video"]';
-async function init() {
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    // Mount the overlay controls (stop + fullscreen toggle) once the player exists,
-    // and auto-expand. Fake-fullscreen the Bitmovin container so its own controls
-    // come along; fall back to the video's parent if the container class differs.
-    try {
-        const video = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(VIDEO_SELECTOR);
-        // Fullscreen the whole player wrapper (which holds Crunchyroll's controls),
-        // not just the video container — otherwise the controls are left behind.
-        const player = video.closest(".video-player-wrapper") ??
-            video.closest("#player-container") ??
-            video.closest(".bitmovinplayer-container") ??
-            video.parentElement ??
-            video;
-        console.log(`${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`);
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .mountPlayerControls */ .Fy)({
-            log: LOG,
-            isExpanded: () => player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK),
-            toggleExpand: () => (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, !player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK)),
-            expandObserveTarget: player,
-        });
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, true);
-    }
-    catch (error) {
-        console.warn(`${LOG} Player not found; controls not mounted:`, error);
-    }
-    // Crunchyroll auto-advances by navigating, so detect the URL change.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .watchUrlChange */ .Jm)(LOG);
-}
-
-
-/***/ },
-
-/***/ "./src/playback/netflix/index.ts"
-(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
-/* harmony export */ });
-/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/netflix/matches.cjs");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
-// TODO: Validate
-
-
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Netflix]`;
-// Netflix links never point directly to episodes.
-// TODO: This probably does not work.
-// TODO: This definately does not handle choosing an account.
-async function init() {
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    const season = GM_getValue("seasonNumber", null);
-    const episode = GM_getValue("episodeNumber", null);
-    if (season === null || episode === null) {
-        throw new Error(`${LOG} Missing season/episode info (season=${season}, episode=${episode})`);
-    }
-    // Season selection — only if dropdown exists (multi-season show)
-    const dropdownButton = document.querySelector("button.dropdown-toggle");
-    if (dropdownButton) {
-        const currentSeasonText = dropdownButton.textContent?.trim() ?? "";
-        if (currentSeasonText !== `Season ${season}`) {
-            dropdownButton.click();
-            await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)('[role="option"], .dropdown-menu a, .dropdown-menu li');
-            const options = document.querySelectorAll('[role="option"], .dropdown-menu a, .dropdown-menu li');
-            const match = Array.from(options).find((o) => o.textContent?.trim() === `Season ${season}`);
-            if (!match)
-                throw new Error(`${LOG} Could not find Season ${season} in dropdown`);
-            match.click();
-        }
-    }
-    // Wait for the correct season's episodes to load by polling the season label
-    await new Promise((resolve) => {
-        const check = () => {
-            const label = document.querySelector(".allEpisodeSelector-season-label");
-            if (label?.textContent?.trim() === `Season ${season}:`) {
-                resolve();
-                return;
-            }
-            setTimeout(check, 200);
-        };
-        check();
-    });
-    // Expand the episode list if it's collapsed
-    const expandButton = document.querySelector('.section-divider.collapsed button[data-uia="section-expand"]');
-    if (expandButton) {
-        expandButton.click();
-        await new Promise((resolve) => {
-            const observer = new MutationObserver(() => {
-                if (!document.querySelector(".section-divider.collapsed")) {
-                    observer.disconnect();
-                    resolve();
-                }
-            });
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-            });
-        });
-    }
-    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(".titleCardList--container.episode-item");
-    const episodeItems = document.querySelectorAll(".titleCardList--container.episode-item");
-    const targetEpisode = episodeItems[episode - 1] ?? null;
-    if (!targetEpisode) {
-        throw new Error(`${LOG} Could not find Episode ${episode} (index ${episode - 1}) in ${episodeItems.length} episodes`);
-    }
-    targetEpisode.click();
-    // Wait for Netflix to navigate to the watch page
-    await new Promise((resolve) => {
-        const observer = new MutationObserver(() => {
-            if (location.pathname.startsWith("/watch/")) {
-                observer.disconnect();
-                resolve();
-            }
-        });
-        observer.observe(document.querySelector("title") ?? document.head, {
-            childList: true,
-            subtree: true,
-            characterData: true,
-        });
-    });
-    GM_setValue("loadingTab", true);
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("Netflix");
-}
-
-
-/***/ },
-
-/***/ "./src/playback/youtube/index.ts"
-(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
-/* harmony export */ });
-/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/youtube/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/YouTube/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
@@ -1378,7 +1772,7 @@ async function init() {
 /* harmony export */   xk: () => (/* binding */ waitForElement),
 /* harmony export */   yy: () => (/* binding */ sleep)
 /* harmony export */ });
-/* unused harmony exports stopAutoControl, createStopButton */
+/* unused harmony exports stopAutoControl, createStopButton, expandPlayer */
 // TODO: Validate
 const REMOTE_LOG = "[Stream Channeler Remote]";
 function sleep(ms) {
@@ -1765,18 +2159,78 @@ function watchUrlChange(log) {
     }, SETTLE_DELAY_MS);
 }
 /**
- * Generic plugin for sites where episode end is detected by URL change, with the
- * floating stop button.
+ * Generic plugin for sites where episode end is detected by URL change. When
+ * `playerSelectors` is given, the player is also fake-fullscreened with the
+ * overlay controls; otherwise only the floating stop button is shown.
  */
-function initUrlChangePlugin(name) {
+function initUrlChangePlugin(name, playerSelectors) {
     const LOG = `${REMOTE_LOG} [${name}]`;
     // Only run the script if the tab was opened by Stream Channeler Remote.
     const loading = GM_getValue("loadingTab", false);
     if (!loading)
         return;
     GM_setValue("loadingTab", false);
-    createStopButton();
     watchUrlChange(LOG);
+    if (!playerSelectors) {
+        createStopButton();
+        return;
+    }
+    waitForElement("video")
+        .then((video) => expandPlayer(LOG, video, playerSelectors))
+        .catch((error) => {
+        console.warn(`${LOG} No video found; showing stop button only:`, error);
+        createStopButton();
+    });
+}
+// Climb from the <video> while each parent is still the same size as the video.
+// Sites usually overlay their controls on a wrapper exactly the video's size, so
+// the outermost such wrapper takes the controls into fullscreen with it.
+function findSameSizeWrapper(video) {
+    const SIZE_TOLERANCE_PX = 4;
+    const rect = video.getBoundingClientRect();
+    let wrapper = video;
+    for (let el = video.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+        const elRect = el.getBoundingClientRect();
+        if (Math.abs(elRect.width - rect.width) > SIZE_TOLERANCE_PX ||
+            Math.abs(elRect.height - rect.height) > SIZE_TOLERANCE_PX) {
+            break;
+        }
+        wrapper = el;
+    }
+    return wrapper === video ? (video.parentElement ?? video) : wrapper;
+}
+/**
+ * Fake-fullscreen the wrapper that holds the site's own controls (not the bare
+ * <video>, or the controls are left behind on the page) and mount the overlay
+ * controls. `playerSelectors` are tried in order via `video.closest()`; when none
+ * match, the outermost wrapper the same size as the video is used.
+ */
+async function expandPlayer(log, video, playerSelectors = []) {
+    let player = null;
+    for (const selector of playerSelectors) {
+        player = video.closest(selector);
+        if (player)
+            break;
+    }
+    player ?? (player = findSameSizeWrapper(video));
+    const target = player;
+    console.log(`${log} Fullscreen target: <${target.tagName.toLowerCase()} class="${target.className}">`);
+    try {
+        mountPlayerControls({
+            log,
+            isExpanded: () => target.classList.contains(FAKE_FULLSCREEN_CLASS),
+            toggleExpand: () => setFakeFullscreen(target, !target.classList.contains(FAKE_FULLSCREEN_CLASS)),
+            expandObserveTarget: target,
+        });
+        // These players keep restyling themselves while they lay out after load, so
+        // wait for that to settle or our fullscreen styles get overwritten.
+        await waitForQuiet(target);
+        setFakeFullscreen(target, true);
+        console.log(`${log} Fullscreen applied`);
+    }
+    catch (error) {
+        console.error(`${log} Controls/fullscreen setup failed:`, error);
+    }
 }
 // How close to the end counts as finished. Sites that cut to a "next episode"
 // promo often never fire `ended`, but the video does reach its duration.
@@ -1811,35 +2265,7 @@ async function initVideoPlugin(config) {
         watchUrlChange(LOG);
         return;
     }
-    // Fullscreen the wrapper that holds the site's own controls, not the bare
-    // <video> — otherwise the controls are left behind on the page.
-    let player = video;
-    for (const selector of config.playerSelectors ?? []) {
-        const match = video.closest(selector);
-        if (match) {
-            player = match;
-            break;
-        }
-    }
-    if (player === video)
-        player = video.parentElement ?? video;
-    console.log(`${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`);
-    try {
-        mountPlayerControls({
-            log: LOG,
-            isExpanded: () => player.classList.contains(FAKE_FULLSCREEN_CLASS),
-            toggleExpand: () => setFakeFullscreen(player, !player.classList.contains(FAKE_FULLSCREEN_CLASS)),
-            expandObserveTarget: player,
-        });
-        // These players keep restyling themselves while they lay out after load, so
-        // wait for that to settle or our fullscreen styles get overwritten.
-        await waitForQuiet(player);
-        setFakeFullscreen(player, true);
-        console.log(`${LOG} Fullscreen applied`);
-    }
-    catch (error) {
-        console.error(`${LOG} Controls/fullscreen setup failed:`, error);
-    }
+    await expandPlayer(LOG, video, config.playerSelectors);
     if (config.autoplay ?? true) {
         const current = document.querySelector(videoSelector);
         if (current?.paused) {
@@ -1898,10 +2324,22 @@ function watchVideoCompletion(log, videoSelector) {
 (module, __unused_webpack_exports, __webpack_require__) {
 
 var map = {
+	"./Adult Swim/index.ts": "./src/manage/Adult Swim/index.ts",
+	"./Crunchyroll/index.ts": "./src/manage/Crunchyroll/index.ts",
+	"./Disney+/index.ts": "./src/manage/Disney+/index.ts",
+	"./HBO Max/index.ts": "./src/manage/HBO Max/index.ts",
+	"./HiDive/index.ts": "./src/manage/HiDive/index.ts",
+	"./Hulu/index.ts": "./src/manage/Hulu/index.ts",
 	"./NHK World/index.ts": "./src/manage/NHK World/index.ts",
+	"./Netflix/index.ts": "./src/manage/Netflix/index.ts",
+	"./Paramount+/index.ts": "./src/manage/Paramount+/index.ts",
+	"./Peacock/index.ts": "./src/manage/Peacock/index.ts",
+	"./Pluto TV/index.ts": "./src/manage/Pluto TV/index.ts",
+	"./Prime Video/index.ts": "./src/manage/Prime Video/index.ts",
 	"./TMDB/index.ts": "./src/manage/TMDB/index.ts",
-	"./crunchyroll/index.ts": "./src/manage/crunchyroll/index.ts",
-	"./youtube/index.ts": "./src/manage/youtube/index.ts"
+	"./The Roku Channel/index.ts": "./src/manage/The Roku Channel/index.ts",
+	"./Tubi/index.ts": "./src/manage/Tubi/index.ts",
+	"./YouTube/index.ts": "./src/manage/YouTube/index.ts"
 };
 
 
@@ -1931,20 +2369,20 @@ webpackContext.id = "./src/manage sync recursive \\/index\\.ts$";
 
 var map = {
 	"./Adult Swim/index.ts": "./src/playback/Adult Swim/index.ts",
+	"./Crunchyroll/index.ts": "./src/playback/Crunchyroll/index.ts",
 	"./Disney+/index.ts": "./src/playback/Disney+/index.ts",
 	"./HBO Max/index.ts": "./src/playback/HBO Max/index.ts",
 	"./HiDive/index.ts": "./src/playback/HiDive/index.ts",
 	"./Hulu/index.ts": "./src/playback/Hulu/index.ts",
 	"./NHK World/index.ts": "./src/playback/NHK World/index.ts",
+	"./Netflix/index.ts": "./src/playback/Netflix/index.ts",
 	"./Paramount+/index.ts": "./src/playback/Paramount+/index.ts",
 	"./Peacock/index.ts": "./src/playback/Peacock/index.ts",
 	"./Pluto TV/index.ts": "./src/playback/Pluto TV/index.ts",
 	"./Prime Video/index.ts": "./src/playback/Prime Video/index.ts",
 	"./The Roku Channel/index.ts": "./src/playback/The Roku Channel/index.ts",
 	"./Tubi/index.ts": "./src/playback/Tubi/index.ts",
-	"./crunchyroll/index.ts": "./src/playback/crunchyroll/index.ts",
-	"./netflix/index.ts": "./src/playback/netflix/index.ts",
-	"./youtube/index.ts": "./src/playback/youtube/index.ts"
+	"./YouTube/index.ts": "./src/playback/YouTube/index.ts"
 };
 
 
@@ -1969,15 +2407,159 @@ webpackContext.id = "./src/playback sync recursive \\/index\\.ts$";
 
 /***/ },
 
+/***/ "./src/manage/Adult Swim/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["adultswim.com"],
+  // Episodes live at /videos/<show>/<episode>.
+  matches: ["https://www.adultswim.com/videos/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Crunchyroll/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["crunchyroll.com"],
+  matches: ["https://www.crunchyroll.com/series/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Disney+/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["disneyplus.com"],
+  matches: [
+    "https://www.disneyplus.com/browse/*",
+    "https://www.disneyplus.com/*/browse/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/HBO Max/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["hbomax.com"],
+  matches: [
+    "https://play.hbomax.com/*",
+    "https://www.hbomax.com/shows/*",
+    "https://www.hbomax.com/movies/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/HiDive/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["hidive.com"],
+  matches: [
+    "https://www.hidive.com/series/*",
+    "https://www.hidive.com/season/*",
+    "https://www.hidive.com/video/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Hulu/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["hulu.com"],
+  matches: ["https://www.hulu.com/series/*", "https://www.hulu.com/movie/*"],
+};
+
+
+/***/ },
+
 /***/ "./src/manage/NHK World/matches.cjs"
 (module) {
 
 module.exports = {
-  // Disabled — URL adding is currently limited to YouTube, Crunchyroll and TMDB.
-  hostnames: [],
-  matches: [],
-  // hostnames: ["nhk.or.jp"],
-  // matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
+  hostnames: ["nhk.or.jp"],
+  matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Netflix/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["netflix.com"],
+  matches: [
+    "https://www.netflix.com/title/*",
+    "https://www.netflix.com/browse*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Paramount+/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["paramountplus.com"],
+  matches: [
+    "https://www.paramountplus.com/shows/*",
+    "https://www.paramountplus.com/movies/video/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Peacock/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["peacocktv.com"],
+  matches: ["https://www.peacocktv.com/watch/asset/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Pluto TV/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["pluto.tv"],
+  matches: [
+    "https://pluto.tv/*/on-demand/series/*",
+    "https://pluto.tv/*/on-demand/movies/*",
+    "https://pluto.tv/*/shows/*",
+    "https://pluto.tv/*/movies/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Prime Video/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["primevideo.com", "amazon.com"],
+  matches: [
+    "https://www.primevideo.com/*",
+    "https://www.amazon.com/gp/video/detail/*",
+  ],
 };
 
 
@@ -1997,18 +2579,29 @@ module.exports = {
 
 /***/ },
 
-/***/ "./src/manage/crunchyroll/matches.cjs"
+/***/ "./src/manage/The Roku Channel/matches.cjs"
 (module) {
 
 module.exports = {
-  hostnames: ["crunchyroll.com"],
-  matches: ["https://www.crunchyroll.com/series/*"],
+  hostnames: ["therokuchannel.roku.com"],
+  matches: ["https://therokuchannel.roku.com/details/*"],
 };
 
 
 /***/ },
 
-/***/ "./src/manage/youtube/matches.cjs"
+/***/ "./src/manage/Tubi/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["tubitv.com"],
+  matches: ["https://tubitv.com/series/*", "https://tubitv.com/movies/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/YouTube/matches.cjs"
 (module) {
 
 module.exports = {
@@ -2036,6 +2629,17 @@ module.exports = {
 
 /***/ },
 
+/***/ "./src/playback/Crunchyroll/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["crunchyroll.com"],
+  matches: ["https://www.crunchyroll.com/watch/*"],
+};
+
+
+/***/ },
+
 /***/ "./src/playback/Disney+/matches.cjs"
 (module) {
 
@@ -2055,10 +2659,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hbomax.com"],
-  matches: [
-    "https://play.hbomax.com/video/watch/*",
-    "https://play.hbomax.com/show/*",
-  ],
+  matches: ["https://play.hbomax.com/video/watch/*"],
 };
 
 
@@ -2095,6 +2696,17 @@ module.exports = {
 module.exports = {
   hostnames: ["nhk.or.jp"],
   matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Netflix/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["netflix.com"],
+  matches: ["https://www.netflix.com/watch/*"],
 };
 
 
@@ -2177,29 +2789,7 @@ module.exports = {
 
 /***/ },
 
-/***/ "./src/playback/crunchyroll/matches.cjs"
-(module) {
-
-module.exports = {
-  hostnames: ["crunchyroll.com"],
-  matches: ["https://www.crunchyroll.com/watch/*"],
-};
-
-
-/***/ },
-
-/***/ "./src/playback/netflix/matches.cjs"
-(module) {
-
-module.exports = {
-  hostnames: ["netflix.com"],
-  matches: ["https://www.netflix.com/*"],
-};
-
-
-/***/ },
-
-/***/ "./src/playback/youtube/matches.cjs"
+/***/ "./src/playback/YouTube/matches.cjs"
 (module) {
 
 module.exports = {
@@ -2339,22 +2929,12 @@ function updateButton() {
     const counter = `<span id="remote-control-counter" style="cursor:pointer;text-decoration:underline">${displayed}/${cards.length}</span>`;
     button.innerHTML = `${icon}${action} (${counter})`;
 }
-function extractEpisodeInfo(card) {
-    const text = card.textContent ?? "";
-    const epMatch = text.match(/Episode(?:\s*:)?\s*(\d+)/i);
-    GM_setValue("episodeNumber", epMatch ? parseInt(epMatch[1], 10) : null);
-    const seasonMatch = text.match(/Season(?:\s*:)?\s*(\d+)/i);
-    GM_setValue("seasonNumber", seasonMatch ? parseInt(seasonMatch[1], 10) : null);
-}
 function clickCurrentCard() {
     // If all videos have been played stop remote.
     if (currentIndex >= cards.length) {
         stopRemote();
         return;
     }
-    // Extract season/episode info from the card and store as GM values
-    // so plugins on show pages can select the correct episode.
-    extractEpisodeInfo(cards[currentIndex]);
     // loadingTab is used to make sure the script only activates on the specific tabs
     // that it opens.
     // TODO: This isn't a perfectly safe way of tracking this because the user could
