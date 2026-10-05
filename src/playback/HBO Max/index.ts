@@ -75,7 +75,7 @@ export function init(): void {
     return;
   }
 
-  // Sometimes JustWatch uses a URL that just links to the show instead of the specific
+  // Sometimes the URL just links to the show instead of the specific
   // episodes so the episode needs to be started manually.
   startVideo();
 }

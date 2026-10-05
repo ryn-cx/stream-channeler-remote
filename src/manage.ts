@@ -126,10 +126,8 @@ async function loadBlankChannels(): Promise<void> {
   );
 }
 
-function pasteQueue(): void {
-  const textarea = document.querySelector<HTMLTextAreaElement>(
-    '[data-slot="dialog-content"] textarea',
-  );
+function pasteQueue(dialog: Element): void {
+  const textarea = dialog.querySelector<HTMLTextAreaElement>("textarea");
   if (!textarea)
     throw new Error(`${LOG} Textarea not found in bulk import modal`);
 
@@ -177,7 +175,7 @@ function addButtonsToModal(dialog: Element): void {
   insertBtn.innerHTML = `${LOAD_ICON_SVG}Insert URLs`;
   insertBtn.addEventListener("click", (e) => {
     e.preventDefault();
-    pasteQueue();
+    pasteQueue(dialog);
   });
 
   modalFooter.insertBefore(insertBtn, modalFooter.firstChild);
@@ -189,13 +187,15 @@ export function initManage(): void {
 
   console.log(`${LOG} Watching for bulk import modal`);
 
+  // The bulk import dialog is rendered inside a WinBox window, so locate it by its
+  // title and use the enclosing window as the dialog root.
   new MutationObserver(() => {
-    const dialog = document.querySelector('[data-slot="dialog-content"]');
-    if (!dialog) return;
-
-    const title = dialog.querySelector('[data-slot="dialog-title"]');
-    if (title?.textContent?.trim() === "Bulk Import") {
-      addButtonsToModal(dialog);
+    for (const title of document.querySelectorAll(
+      '.winbox [data-slot="dialog-title"]',
+    )) {
+      if (title.textContent?.trim() !== "Bulk Import") continue;
+      const dialog = title.closest(".winbox");
+      if (dialog) addButtonsToModal(dialog);
     }
   }).observe(document.body, { childList: true, subtree: true });
 }

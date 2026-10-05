@@ -44,19 +44,23 @@ function updateButton(): void {
   }
 
   if (!button) {
-    // Place the button right after the "Next" button in the header, matching its
-    // styling.
-    const nextButton = document
-      .querySelector<SVGElement>("svg.lucide-skip-forward")
-      ?.closest("button");
-    if (!nextButton?.parentElement) return;
+    // Place the button right after the "Comments" button in the channel toolbar,
+    // matching its styling.
+    const commentsButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("button"),
+    ).find(
+      (b) =>
+        b.querySelector("svg.lucide-message-square") &&
+        b.textContent.trim() === "Comments",
+    );
+    if (!commentsButton?.parentElement) return;
 
     button = document.createElement("button");
     button.id = "remote-control-btn";
-    button.className = nextButton.className;
+    button.className = commentsButton.className;
     button.setAttribute("data-slot", "button");
     button.addEventListener("click", handleButtonClick);
-    nextButton.after(button);
+    commentsButton.after(button);
   }
 
   const icon = running ? STOP_ICON_SVG : PLAY_ICON_SVG;

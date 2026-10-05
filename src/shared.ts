@@ -297,24 +297,59 @@ export interface PlayerControlsConfig {
 
 // Add a generic controls overlay (Stop Auto Control + an expand/restore toggle)
 // to every controller-opened tab. It's always pinned to the same spot — fixed in
-// the top-left of the top page, above any fake-fullscreen player — independent of
-// the site's own player. It rests faint and becomes solid on hover, so it stays
-// discoverable without permanently covering the video. Site-specific behaviour
-// (how fullscreen is faked) is supplied via `config`.
-const CONTROLS_RESTING_OPACITY = "0.25";
+// the top-right of the top page, above any fake-fullscreen player — independent
+// of the site's own player. Like a video player's own controls, it's hidden until
+// the cursor moves, then fades out again once the cursor is idle (but stays while
+// hovered). Site-specific behaviour (how fullscreen is faked) is supplied via
+// `config`.
+const CONTROLS_IDLE_HIDE_MS = 2500;
 export function mountPlayerControls(config: PlayerControlsConfig): void {
   const log = config.log ?? REMOTE_LOG;
   if (document.getElementById("stream-channeler-controls")) return;
 
   const container = document.createElement("div");
   container.id = "stream-channeler-controls";
-  container.style.cssText = `position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;opacity:${CONTROLS_RESTING_OPACITY};transition:opacity 0.2s ease;`;
-  container.addEventListener("mouseenter", () => {
-    container.style.opacity = "1";
-  });
-  container.addEventListener("mouseleave", () => {
-    container.style.opacity = CONTROLS_RESTING_OPACITY;
-  });
+  container.style.cssText =
+    "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;opacity:0;pointer-events:none;transition:opacity 0.3s ease;";
+
+  // Visibility is driven by a window capture-phase pointermove listener (which
+  // runs before any page handler can stop it) rather than mouseenter/mouseleave,
+  // because some players (e.g. Adult Swim) swallow pointer events.
+  let hideTimer: number | undefined;
+  const setVisible = (visible: boolean): void => {
+    container.style.opacity = visible ? "1" : "0";
+    // Not clickable while hidden, so a stray click can't hit an invisible button.
+    container.style.pointerEvents = visible ? "auto" : "none";
+  };
+  const hide = (): void => {
+    clearTimeout(hideTimer);
+    setVisible(false);
+  };
+  window.addEventListener(
+    "pointermove",
+    (event) => {
+      setVisible(true);
+      clearTimeout(hideTimer);
+      const rect = container.getBoundingClientRect();
+      const hovered =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+      // Keep showing while the cursor rests on the controls.
+      if (!hovered) hideTimer = window.setTimeout(hide, CONTROLS_IDLE_HIDE_MS);
+    },
+    { capture: true, passive: true },
+  );
+  // Pointer left the page entirely (no element it moved to).
+  document.addEventListener(
+    "pointerout",
+    (event) => {
+      if (!event.relatedTarget) hide();
+    },
+    { capture: true, passive: true },
+  );
+  window.addEventListener("blur", hide);
 
   const stopButton = createOverlayButton(
     document,
@@ -456,4 +491,152 @@ export function initUrlChangePlugin(name: string): void {
 
   createStopButton();
   watchUrlChange(LOG);
+}
+
+export interface VideoPluginConfig {
+  /** Display name of the site, used in log messages. */
+  name: string;
+  /**
+   * Candidate selectors for the site's player wrapper — the element that holds
+   * both the <video> and the site's own controls. Tried in order via
+   * `video.closest()`; the first hit is what gets fake-fullscreened. Falls back
+   * to the video's parent when none match.
+   */
+  playerSelectors?: string[];
+  /** Selector for the <video> element. Defaults to any video on the page. */
+  videoSelector?: string;
+  /**
+   * Also treat a URL change as the end of the episode. For sites whose player
+   * auto-advances by navigating instead of ending the video element.
+   */
+  watchUrl?: boolean;
+  /** Nudge playback if the player loads paused. Defaults to true. */
+  autoplay?: boolean;
+}
+
+// How close to the end counts as finished. Sites that cut to a "next episode"
+// promo often never fire `ended`, but the video does reach its duration.
+const VIDEO_END_SLACK_S = 1;
+const VIDEO_POLL_MS = 1000;
+
+/**
+ * Generic plugin for the many streaming sites that play a plain <video> in an
+ * SPA: fake-fullscreen the player, mount the overlay controls, and signal the
+ * end of the episode when the video finishes (or, optionally, when the site
+ * auto-advances by navigating).
+ *
+ * The <video> is re-read on every poll rather than captured once, because these
+ * players routinely tear down and recreate the element (ad breaks, quality
+ * switches, next-episode transitions).
+ */
+export async function initVideoPlugin(
+  config: VideoPluginConfig,
+): Promise<void> {
+  const LOG = `${REMOTE_LOG} [${config.name}]`;
+  // Only run the script if the tab was opened by Stream Channeler Remote.
+  const loading = GM_getValue("loadingTab", false);
+  if (!loading) return;
+  GM_setValue("loadingTab", false);
+
+  const videoSelector = config.videoSelector ?? "video";
+  console.log(`${LOG} Tab opened by Stream Channeler Remote, initializing`);
+
+  let video: HTMLVideoElement;
+  try {
+    video = await waitForElement<HTMLVideoElement>(videoSelector);
+  } catch (error) {
+    console.warn(`${LOG} No video found; falling back to URL watching:`, error);
+    createStopButton();
+    watchUrlChange(LOG);
+    return;
+  }
+
+  // Fullscreen the wrapper that holds the site's own controls, not the bare
+  // <video> — otherwise the controls are left behind on the page.
+  let player: HTMLElement = video;
+  for (const selector of config.playerSelectors ?? []) {
+    const match = video.closest<HTMLElement>(selector);
+    if (match) {
+      player = match;
+      break;
+    }
+  }
+  if (player === video) player = video.parentElement ?? video;
+  console.log(
+    `${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`,
+  );
+
+  try {
+    mountPlayerControls({
+      log: LOG,
+      isExpanded: () => player.classList.contains(FAKE_FULLSCREEN_CLASS),
+      toggleExpand: () =>
+        setFakeFullscreen(
+          player,
+          !player.classList.contains(FAKE_FULLSCREEN_CLASS),
+        ),
+      expandObserveTarget: player,
+    });
+    // These players keep restyling themselves while they lay out after load, so
+    // wait for that to settle or our fullscreen styles get overwritten.
+    await waitForQuiet(player);
+    setFakeFullscreen(player, true);
+    console.log(`${LOG} Fullscreen applied`);
+  } catch (error) {
+    console.error(`${LOG} Controls/fullscreen setup failed:`, error);
+  }
+
+  if (config.autoplay ?? true) {
+    const current = document.querySelector<HTMLVideoElement>(videoSelector);
+    if (current?.paused) {
+      current.play().catch((error: unknown) => {
+        console.warn(`${LOG} Autoplay was rejected:`, error);
+      });
+    }
+  }
+
+  watchVideoCompletion(LOG, videoSelector);
+  if (config.watchUrl) watchUrlChange(LOG);
+  console.log(`${LOG} Watching for end`);
+}
+
+// Signal completion once the current <video> ends or reaches its duration. The
+// element is looked up fresh each tick so a recreated player is picked up.
+function watchVideoCompletion(log: string, videoSelector: string): void {
+  let done = false;
+  let seenPlaying = false;
+
+  function finish(reason: string): void {
+    if (done) return;
+    done = true;
+    clearInterval(poll);
+    console.log(`${log} Video finished (${reason})`);
+    signalEpisodeEnded();
+  }
+
+  const poll = window.setInterval(() => {
+    const video = document.querySelector<HTMLVideoElement>(videoSelector);
+    if (!video) return;
+
+    // Attach `ended` once per element; recreated players get their own listener.
+    if (!video.dataset.scrEndWatched) {
+      video.dataset.scrEndWatched = "1";
+      video.addEventListener("ended", () => finish("ended event"));
+    }
+
+    // Only trust the near-end check after playback has actually started, so a
+    // player reporting a stale currentTime/duration on load can't end the
+    // episode before it begins.
+    if (video.currentTime > 0 && !video.paused) seenPlaying = true;
+    if (!seenPlaying) return;
+
+    const { currentTime, duration } = video;
+    if (
+      Number.isFinite(duration) &&
+      duration > 0 &&
+      currentTime >= duration - VIDEO_END_SLACK_S
+    ) {
+      finish(`reached ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`);
+    }
+  }, VIDEO_POLL_MS);
 }

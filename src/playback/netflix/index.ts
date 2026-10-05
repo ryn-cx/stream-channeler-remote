@@ -5,7 +5,7 @@ export { hostnames, matches } from "./matches.cjs";
 
 const LOG = `${REMOTE_LOG} [Netflix]`;
 
-// JustWatch never has direct episode links for Netflix.
+// Netflix links never point directly to episodes.
 // TODO: This probably does not work.
 // TODO: This definately does not handle choosing an account.
 export async function init(): Promise<void> {

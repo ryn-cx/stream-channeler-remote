@@ -4,7 +4,7 @@ const path = require("node:path");
 const { author, version, repository, description } = require("../package.json");
 
 // Dynamically load all of the plugins and get the domains they support. Plugins
-// live in per-website folders (e.g. src/manage/youtube/matches.cjs), so walk
+// live in per-website folders (e.g. src/manage/YouTube/matches.cjs), so walk
 // the tree to collect every matches.cjs.
 function readMatches(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

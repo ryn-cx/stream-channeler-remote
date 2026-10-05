@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv stream_channeler.ts controller.ts)",
+      "Bash(mv plugins:*)",
+      "Bash(bun add:*)"
+    ],
+    "additionalDirectories": ["\\tmp"]
+  }
+}
