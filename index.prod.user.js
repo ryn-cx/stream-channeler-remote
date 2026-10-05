@@ -7,15 +7,32 @@
 // @match         https://streamchanneler.com/channels
 // @match         https://streamchanneler.com/channels/*
 // @match         http://localhost:5173/*
-// @match         https://www.crunchyroll.com/watch/*
+// @match         https://www.adultswim.com/videos/*
+// @match         https://www.disneyplus.com/play/*
+// @match         https://www.disneyplus.com/*/video/*
 // @match         https://play.hbomax.com/video/watch/*
 // @match         https://play.hbomax.com/show/*
-// @match         https://www.netflix.com/*
+// @match         https://www.hidive.com/video/*
+// @match         https://www.hidive.com/stream/*
+// @match         https://www.hulu.com/watch/*
 // @match         https://www3.nhk.or.jp/nhkworld/en/shows/*
+// @match         https://www.paramountplus.com/shows/video/*
+// @match         https://www.paramountplus.com/movies/video/*
+// @match         https://www.peacocktv.com/watch/*
+// @match         https://pluto.tv/*/on-demand/*
+// @match         https://pluto.tv/*/live-tv/*
+// @match         https://www.primevideo.com/*
+// @match         https://www.amazon.com/gp/video/*
+// @match         https://therokuchannel.roku.com/watch/*
+// @match         https://tubitv.com/movies/*
+// @match         https://tubitv.com/tv-shows/*
+// @match         https://tubitv.com/series/*
+// @match         https://www.crunchyroll.com/watch/*
+// @match         https://www.netflix.com/*
 // @match         https://www.youtube.com/watch*
+// @match         https://www.themoviedb.org/tv/*
+// @match         https://www.themoviedb.org/movie/*
 // @match         https://www.crunchyroll.com/series/*
-// @match         https://www.justwatch.com/*/tv-show/*
-// @match         https://www.justwatch.com/*/movie/*
 // @match         https://www.youtube.com/@*
 // @match         https://www.youtube.com/channel/*
 // @match         https://www.youtube.com/c/*
@@ -128,8 +145,8 @@ async function loadBlankChannels() {
         : "";
     alert(`Loaded ${ids.length} channels (${totalShows} shows) into Stream Channeler Remote.${failureNote}`);
 }
-function pasteQueue() {
-    const textarea = document.querySelector('[data-slot="dialog-content"] textarea');
+function pasteQueue(dialog) {
+    const textarea = dialog.querySelector("textarea");
     if (!textarea)
         throw new Error(`${LOG} Textarea not found in bulk import modal`);
     const channels = getChannelQueues();
@@ -172,7 +189,7 @@ function addButtonsToModal(dialog) {
     insertBtn.innerHTML = `${LOAD_ICON_SVG}Insert URLs`;
     insertBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        pasteQueue();
+        pasteQueue(dialog);
     });
     modalFooter.insertBefore(insertBtn, modalFooter.firstChild);
     modalFooter.insertBefore(loadBtn, modalFooter.firstChild);
@@ -181,15 +198,103 @@ function initManage() {
     if (location.pathname !== "/channels")
         return;
     console.log(`${LOG} Watching for bulk import modal`);
+    // The bulk import dialog is rendered inside a WinBox window, so locate it by its
+    // title and use the enclosing window as the dialog root.
     new MutationObserver(() => {
-        const dialog = document.querySelector('[data-slot="dialog-content"]');
-        if (!dialog)
-            return;
-        const title = dialog.querySelector('[data-slot="dialog-title"]');
-        if (title?.textContent?.trim() === "Bulk Import") {
-            addButtonsToModal(dialog);
+        for (const title of document.querySelectorAll('.winbox [data-slot="dialog-title"]')) {
+            if (title.textContent?.trim() !== "Bulk Import")
+                continue;
+            const dialog = title.closest(".winbox");
+            if (dialog)
+                addButtonsToModal(dialog);
         }
     }).observe(document.body, { childList: true, subtree: true });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/NHK World/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/NHK World/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// NHK World show pages look like /nhkworld/en/shows/100years-midosuji/ where the
+// trailing segment is a slug, while individual episode/video pages use an
+// all-numeric id (e.g. /nhkworld/en/shows/2019439/). Only show pages should get
+// the "Add to Channel" button, so require a non-numeric trailing segment.
+const SHOW_PATH_RE = /^\/nhkworld\/en\/shows\/(?!\d+\/?$)[^/]+\/?$/;
+// Match by the show slug so the highlight survives trailing-slash differences
+// between the page URL and the URL stored against a channel.
+const SLUG_RE = /\/shows\/([^/]+)\/?$/;
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "NHK World",
+        buttonColor: "#00a0c6",
+        urlRegex: SHOW_PATH_RE,
+        waitSelector: ".pProgramHero__main",
+        getCurrentUrl: () => location.href,
+        getMatchKey: (url) => url.match(SLUG_RE)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/TMDB/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/TMDB/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// TMDB title pages look like /tv/1396-breaking-bad or /movie/550-fight-club, and
+// the slug is optional (/tv/1396 resolves to the same page). Subpages such as
+// /tv/1396-breaking-bad/season/1 or /movie/550-fight-club/cast shouldn't get the
+// "Add to Channel" button, so require the id segment to end the path.
+const TITLE_PATH_RE = /^\/(tv|movie)\/\d+(-[^/]*)?\/?$/;
+// Match by media type + numeric id so the highlight survives slug, language
+// query string and trailing-slash differences between the page URL and the URL
+// stored against a channel.
+const TITLE_ID_RE = /\/(tv|movie)\/(\d+)/;
+function extractTitleKey(url) {
+    const match = url.match(TITLE_ID_RE);
+    return match ? `${match[1]}/${match[2]}` : null;
+}
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "TMDB",
+        buttonColor: "#01b4e4",
+        textColor: "#0d253f",
+        urlRegex: TITLE_PATH_RE,
+        // TMDB is server-rendered, so the page body is enough of an anchor and this
+        // avoids depending on the detail page's markup.
+        waitSelector: "body",
+        // Drop the query string (TMDB appends ?language=…) so the queued URL is the
+        // plain canonical title URL.
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
+        getMatchKey: extractTitleKey,
+    });
 }
 
 
@@ -223,77 +328,6 @@ function init() {
         waitSelector: "h1",
         getCurrentUrl: () => location.href,
         getMatchKey: (url) => url.match(SERIES_ID_RE)?.[1] ?? null,
-    });
-}
-
-
-/***/ },
-
-/***/ "./src/manage/justwatch/index.ts"
-(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
-/* harmony export */ });
-/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/justwatch/matches.cjs");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
-// TODO: Validate
-
-
-function init() {
-    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
-        website_name: "JustWatch",
-        buttonColor: "#fbc500",
-        textColor: "#060d17",
-        // JustWatch title pages look like /us/tv-show/<slug> or /us/movie/<slug>.
-        urlRegex: /\/(tv-show|movie)\//,
-        waitSelector: ".title-detail-hero__details",
-        getCurrentUrl: () => location.href,
-        getMatchKey: (url) => url,
-        showSourceInput: true,
-    });
-}
-
-
-/***/ },
-
-/***/ "./src/manage/nhkworld/index.ts"
-(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
-/* harmony export */ });
-/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/nhkworld/matches.cjs");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
-// TODO: Validate
-
-
-// NHK World show pages look like /nhkworld/en/shows/100years-midosuji/ where the
-// trailing segment is a slug, while individual episode/video pages use an
-// all-numeric id (e.g. /nhkworld/en/shows/2019439/). Only show pages should get
-// the "Add to Channel" button, so require a non-numeric trailing segment.
-const SHOW_PATH_RE = /^\/nhkworld\/en\/shows\/(?!\d+\/?$)[^/]+\/?$/;
-// Match by the show slug so the highlight survives trailing-slash differences
-// between the page URL and the URL stored against a channel.
-const SLUG_RE = /\/shows\/([^/]+)\/?$/;
-function init() {
-    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
-        website_name: "NHK World",
-        buttonColor: "#00a0c6",
-        urlRegex: SHOW_PATH_RE,
-        waitSelector: ".pProgramHero__main",
-        getCurrentUrl: () => location.href,
-        getMatchKey: (url) => url.match(SLUG_RE)?.[1] ?? null,
     });
 }
 
@@ -550,7 +584,7 @@ function initManagePlugin(config) {
 
 /***/ },
 
-/***/ "./src/playback/crunchyroll/index.ts"
+/***/ "./src/playback/Adult Swim/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -561,53 +595,30 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/crunchyroll/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Adult Swim/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
 
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Crunchyroll]`;
-// Crunchyroll uses a native Bitmovin player: a <video id="bitmovinplayer-video-*">
-// inside the ".video-player-wrapper" (which also holds Crunchyroll's controls).
-const VIDEO_SELECTOR = 'video[id^="bitmovinplayer-video"]';
-async function init() {
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    // Mount the overlay controls (stop + fullscreen toggle) once the player exists,
-    // and auto-expand. Fake-fullscreen the Bitmovin container so its own controls
-    // come along; fall back to the video's parent if the container class differs.
-    try {
-        const video = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(VIDEO_SELECTOR);
-        // Fullscreen the whole player wrapper (which holds Crunchyroll's controls),
-        // not just the video container — otherwise the controls are left behind.
-        const player = video.closest(".video-player-wrapper") ??
-            video.closest("#player-container") ??
-            video.closest(".bitmovinplayer-container") ??
-            video.parentElement ??
-            video;
-        console.log(`${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`);
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .mountPlayerControls */ .Fy)({
-            log: LOG,
-            isExpanded: () => player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK),
-            toggleExpand: () => (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, !player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK)),
-            expandObserveTarget: player,
-        });
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, true);
-    }
-    catch (error) {
-        console.warn(`${LOG} Player not found; controls not mounted:`, error);
-    }
-    // Crunchyroll auto-advances by navigating, so detect the URL change.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .watchUrlChange */ .Jm)(LOG);
+function init() {
+    // Adult Swim advances to the next episode by navigating to a new /videos/
+    // URL, so the URL change is the primary end signal; the video's own end is a
+    // fallback.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Adult Swim",
+        // Adult Swim's ASVP player nests root > .top-container >
+        // .top-player-container > <video>, and mounts its controls outside
+        // .top-player-container. The root's class is a hashed CSS module name, so
+        // find it as the parent of .top-container.
+        playerSelectors: [":has(> .top-container)", ".top-container"],
+        watchUrl: true,
+    });
 }
 
 
 /***/ },
 
-/***/ "./src/playback/hbomax/index.ts"
+/***/ "./src/playback/Disney+/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -618,7 +629,40 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/hbomax/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Disney+/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    // Disney+ mounts its player (and controls) inside the BTM media client
+    // container that wraps the <video>.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Disney+",
+        playerSelectors: [
+            ".btm-media-clients",
+            ".btm-media-overlays-container",
+            "#hivePlayer",
+            ".video-container",
+        ],
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/HBO Max/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/HBO Max/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
@@ -678,7 +722,7 @@ function init() {
         (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("HBO Max");
         return;
     }
-    // Sometimes JustWatch uses a URL that just links to the show instead of the specific
+    // Sometimes the URL just links to the show instead of the specific
     // episodes so the episode needs to be started manually.
     startVideo();
 }
@@ -686,7 +730,7 @@ function init() {
 
 /***/ },
 
-/***/ "./src/playback/netflix/index.ts"
+/***/ "./src/playback/HiDive/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -697,98 +741,29 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/netflix/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/HiDive/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
 
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Netflix]`;
-// JustWatch never has direct episode links for Netflix.
-// TODO: This probably does not work.
-// TODO: This definately does not handle choosing an account.
-async function init() {
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    const season = GM_getValue("seasonNumber", null);
-    const episode = GM_getValue("episodeNumber", null);
-    if (season === null || episode === null) {
-        throw new Error(`${LOG} Missing season/episode info (season=${season}, episode=${episode})`);
-    }
-    // Season selection — only if dropdown exists (multi-season show)
-    const dropdownButton = document.querySelector("button.dropdown-toggle");
-    if (dropdownButton) {
-        const currentSeasonText = dropdownButton.textContent?.trim() ?? "";
-        if (currentSeasonText !== `Season ${season}`) {
-            dropdownButton.click();
-            await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)('[role="option"], .dropdown-menu a, .dropdown-menu li');
-            const options = document.querySelectorAll('[role="option"], .dropdown-menu a, .dropdown-menu li');
-            const match = Array.from(options).find((o) => o.textContent?.trim() === `Season ${season}`);
-            if (!match)
-                throw new Error(`${LOG} Could not find Season ${season} in dropdown`);
-            match.click();
-        }
-    }
-    // Wait for the correct season's episodes to load by polling the season label
-    await new Promise((resolve) => {
-        const check = () => {
-            const label = document.querySelector(".allEpisodeSelector-season-label");
-            if (label?.textContent?.trim() === `Season ${season}:`) {
-                resolve();
-                return;
-            }
-            setTimeout(check, 200);
-        };
-        check();
+function init() {
+    // HiDive runs a video.js-based player, so the ".video-js" wrapper holds both
+    // the video and the site's controls.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "HiDive",
+        playerSelectors: [
+            ".video-js",
+            "#video-player",
+            ".player-container",
+            ".vjs-player",
+        ],
     });
-    // Expand the episode list if it's collapsed
-    const expandButton = document.querySelector('.section-divider.collapsed button[data-uia="section-expand"]');
-    if (expandButton) {
-        expandButton.click();
-        await new Promise((resolve) => {
-            const observer = new MutationObserver(() => {
-                if (!document.querySelector(".section-divider.collapsed")) {
-                    observer.disconnect();
-                    resolve();
-                }
-            });
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-                attributes: true,
-            });
-        });
-    }
-    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(".titleCardList--container.episode-item");
-    const episodeItems = document.querySelectorAll(".titleCardList--container.episode-item");
-    const targetEpisode = episodeItems[episode - 1] ?? null;
-    if (!targetEpisode) {
-        throw new Error(`${LOG} Could not find Episode ${episode} (index ${episode - 1}) in ${episodeItems.length} episodes`);
-    }
-    targetEpisode.click();
-    // Wait for Netflix to navigate to the watch page
-    await new Promise((resolve) => {
-        const observer = new MutationObserver(() => {
-            if (location.pathname.startsWith("/watch/")) {
-                observer.disconnect();
-                resolve();
-            }
-        });
-        observer.observe(document.querySelector("title") ?? document.head, {
-            childList: true,
-            subtree: true,
-            characterData: true,
-        });
-    });
-    GM_setValue("loadingTab", true);
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("Netflix");
 }
 
 
 /***/ },
 
-/***/ "./src/playback/nhkworld/index.ts"
+/***/ "./src/playback/Hulu/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -799,7 +774,41 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/nhkworld/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Hulu/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    // Hulu advances to the next episode by navigating to a new /watch/ URL, so
+    // the URL change is the primary end signal; the video's own end is a fallback.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Hulu",
+        playerSelectors: [
+            "#content-video-player",
+            ".VideoPlayerContainer",
+            ".PlayerContainer",
+            '[data-testid="player-container"]',
+        ],
+        watchUrl: true,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/NHK World/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/NHK World/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
@@ -934,6 +943,346 @@ async function init() {
 
 /***/ },
 
+/***/ "./src/playback/Paramount+/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Paramount+/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Paramount+",
+        playerSelectors: [
+            ".aa-player-container",
+            "#player-container",
+            ".video-player-container",
+            ".player-wrapper",
+        ],
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/Peacock/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Peacock/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    // Basic implementation: assume Peacock navigates to a new URL when the video ends.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("Peacock");
+}
+
+
+/***/ },
+
+/***/ "./src/playback/Pluto TV/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Pluto TV/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Pluto TV",
+        playerSelectors: [
+            '[data-testid="video-player"]',
+            "#video-player",
+            ".video-player",
+            ".player-wrapper",
+        ],
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/Prime Video/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Prime Video/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    // Prime Video plays inside its own web player SDK container, which also holds
+    // the site's controls, so that is what gets expanded.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Prime Video",
+        playerSelectors: [
+            ".webPlayerSDKContainer",
+            ".webPlayerUIContainer",
+            "#dv-web-player",
+            ".dv-player-fullscreen",
+        ],
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/The Roku Channel/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/The Roku Channel/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Roku Channel",
+        playerSelectors: [
+            '[data-testid="video-player"]',
+            "#video-player",
+            ".video-container",
+            ".player-container",
+        ],
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/Tubi/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Tubi/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+function init() {
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "Tubi",
+        playerSelectors: [
+            "#video-player-container",
+            '[data-id="video-player"]',
+            ".video-player",
+            ".web-player",
+        ],
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/crunchyroll/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/crunchyroll/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Crunchyroll]`;
+// Crunchyroll uses a native Bitmovin player: a <video id="bitmovinplayer-video-*">
+// inside the ".video-player-wrapper" (which also holds Crunchyroll's controls).
+const VIDEO_SELECTOR = 'video[id^="bitmovinplayer-video"]';
+async function init() {
+    // Only run the script if the tab was opened by Stream Channeler Remote.
+    const loading = GM_getValue("loadingTab", false);
+    if (!loading)
+        return;
+    GM_setValue("loadingTab", false);
+    // Mount the overlay controls (stop + fullscreen toggle) once the player exists,
+    // and auto-expand. Fake-fullscreen the Bitmovin container so its own controls
+    // come along; fall back to the video's parent if the container class differs.
+    try {
+        const video = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(VIDEO_SELECTOR);
+        // Fullscreen the whole player wrapper (which holds Crunchyroll's controls),
+        // not just the video container — otherwise the controls are left behind.
+        const player = video.closest(".video-player-wrapper") ??
+            video.closest("#player-container") ??
+            video.closest(".bitmovinplayer-container") ??
+            video.parentElement ??
+            video;
+        console.log(`${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`);
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .mountPlayerControls */ .Fy)({
+            log: LOG,
+            isExpanded: () => player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK),
+            toggleExpand: () => (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, !player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK)),
+            expandObserveTarget: player,
+        });
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, true);
+    }
+    catch (error) {
+        console.warn(`${LOG} Player not found; controls not mounted:`, error);
+    }
+    // Crunchyroll auto-advances by navigating, so detect the URL change.
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .watchUrlChange */ .Jm)(LOG);
+}
+
+
+/***/ },
+
+/***/ "./src/playback/netflix/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/netflix/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Netflix]`;
+// Netflix links never point directly to episodes.
+// TODO: This probably does not work.
+// TODO: This definately does not handle choosing an account.
+async function init() {
+    const loading = GM_getValue("loadingTab", false);
+    if (!loading)
+        return;
+    GM_setValue("loadingTab", false);
+    const season = GM_getValue("seasonNumber", null);
+    const episode = GM_getValue("episodeNumber", null);
+    if (season === null || episode === null) {
+        throw new Error(`${LOG} Missing season/episode info (season=${season}, episode=${episode})`);
+    }
+    // Season selection — only if dropdown exists (multi-season show)
+    const dropdownButton = document.querySelector("button.dropdown-toggle");
+    if (dropdownButton) {
+        const currentSeasonText = dropdownButton.textContent?.trim() ?? "";
+        if (currentSeasonText !== `Season ${season}`) {
+            dropdownButton.click();
+            await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)('[role="option"], .dropdown-menu a, .dropdown-menu li');
+            const options = document.querySelectorAll('[role="option"], .dropdown-menu a, .dropdown-menu li');
+            const match = Array.from(options).find((o) => o.textContent?.trim() === `Season ${season}`);
+            if (!match)
+                throw new Error(`${LOG} Could not find Season ${season} in dropdown`);
+            match.click();
+        }
+    }
+    // Wait for the correct season's episodes to load by polling the season label
+    await new Promise((resolve) => {
+        const check = () => {
+            const label = document.querySelector(".allEpisodeSelector-season-label");
+            if (label?.textContent?.trim() === `Season ${season}:`) {
+                resolve();
+                return;
+            }
+            setTimeout(check, 200);
+        };
+        check();
+    });
+    // Expand the episode list if it's collapsed
+    const expandButton = document.querySelector('.section-divider.collapsed button[data-uia="section-expand"]');
+    if (expandButton) {
+        expandButton.click();
+        await new Promise((resolve) => {
+            const observer = new MutationObserver(() => {
+                if (!document.querySelector(".section-divider.collapsed")) {
+                    observer.disconnect();
+                    resolve();
+                }
+            });
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+            });
+        });
+    }
+    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(".titleCardList--container.episode-item");
+    const episodeItems = document.querySelectorAll(".titleCardList--container.episode-item");
+    const targetEpisode = episodeItems[episode - 1] ?? null;
+    if (!targetEpisode) {
+        throw new Error(`${LOG} Could not find Episode ${episode} (index ${episode - 1}) in ${episodeItems.length} episodes`);
+    }
+    targetEpisode.click();
+    // Wait for Netflix to navigate to the watch page
+    await new Promise((resolve) => {
+        const observer = new MutationObserver(() => {
+            if (location.pathname.startsWith("/watch/")) {
+                observer.disconnect();
+                resolve();
+            }
+        });
+        observer.observe(document.querySelector("title") ?? document.head, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+        });
+    });
+    GM_setValue("loadingTab", true);
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("Netflix");
+}
+
+
+/***/ },
+
 /***/ "./src/playback/youtube/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -1022,6 +1371,7 @@ async function init() {
 /* harmony export */   HK: () => (/* binding */ FAKE_FULLSCREEN_CLASS),
 /* harmony export */   Jm: () => (/* binding */ watchUrlChange),
 /* harmony export */   PL: () => (/* binding */ waitForQuiet),
+/* harmony export */   TD: () => (/* binding */ initVideoPlugin),
 /* harmony export */   e$: () => (/* binding */ signalEpisodeEnded),
 /* harmony export */   og: () => (/* binding */ REMOTE_LOG),
 /* harmony export */   t7: () => (/* binding */ setFakeFullscreen),
@@ -1171,15 +1521,6 @@ const RESTORE_ICON = {
         { tag: "path", attrs: { d: "M16 21v-3a2 2 0 0 1 2-2h3" } },
     ],
 };
-const EXPAND_ICON = {
-    attrs: STROKE_ATTRS,
-    shapes: [
-        { tag: "path", attrs: { d: "M8 3H5a2 2 0 0 0-2 2v3" } },
-        { tag: "path", attrs: { d: "M21 8V5a2 2 0 0 0-2-2h-3" } },
-        { tag: "path", attrs: { d: "M3 16v3a2 2 0 0 0 2 2h3" } },
-        { tag: "path", attrs: { d: "M16 21h3a2 2 0 0 0 2-2v-3" } },
-    ],
-};
 // Build an icon's SVG element with DOM APIs (no string parsing — CSP-safe).
 function buildIcon(doc, spec) {
     const svg = doc.createElementNS(SVG_NS, "svg");
@@ -1284,24 +1625,51 @@ function setFakeFullscreen(target, on) {
 }
 // Add a generic controls overlay (Stop Auto Control + an expand/restore toggle)
 // to every controller-opened tab. It's always pinned to the same spot — fixed in
-// the top-left of the top page, above any fake-fullscreen player — independent of
-// the site's own player. It rests faint and becomes solid on hover, so it stays
-// discoverable without permanently covering the video. Site-specific behaviour
-// (how fullscreen is faked) is supplied via `config`.
-const CONTROLS_RESTING_OPACITY = "0.25";
+// the top-right of the top page, above any fake-fullscreen player — independent
+// of the site's own player. Like a video player's own controls, it's hidden until
+// the cursor moves, then fades out again once the cursor is idle (but stays while
+// hovered). Site-specific behaviour (how fullscreen is faked) is supplied via
+// `config`.
+const CONTROLS_IDLE_HIDE_MS = 2500;
 function mountPlayerControls(config) {
     const log = config.log ?? REMOTE_LOG;
     if (document.getElementById("stream-channeler-controls"))
         return;
     const container = document.createElement("div");
     container.id = "stream-channeler-controls";
-    container.style.cssText = `position:fixed;top:12px;left:12px;z-index:2147483647;display:flex;gap:8px;opacity:${CONTROLS_RESTING_OPACITY};transition:opacity 0.2s ease;`;
-    container.addEventListener("mouseenter", () => {
-        container.style.opacity = "1";
-    });
-    container.addEventListener("mouseleave", () => {
-        container.style.opacity = CONTROLS_RESTING_OPACITY;
-    });
+    container.style.cssText =
+        "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;opacity:0;pointer-events:none;transition:opacity 0.3s ease;";
+    // Visibility is driven by a window capture-phase pointermove listener (which
+    // runs before any page handler can stop it) rather than mouseenter/mouseleave,
+    // because some players (e.g. Adult Swim) swallow pointer events.
+    let hideTimer;
+    const setVisible = (visible) => {
+        container.style.opacity = visible ? "1" : "0";
+        // Not clickable while hidden, so a stray click can't hit an invisible button.
+        container.style.pointerEvents = visible ? "auto" : "none";
+    };
+    const hide = () => {
+        clearTimeout(hideTimer);
+        setVisible(false);
+    };
+    window.addEventListener("pointermove", (event) => {
+        setVisible(true);
+        clearTimeout(hideTimer);
+        const rect = container.getBoundingClientRect();
+        const hovered = event.clientX >= rect.left &&
+            event.clientX <= rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom;
+        // Keep showing while the cursor rests on the controls.
+        if (!hovered)
+            hideTimer = window.setTimeout(hide, CONTROLS_IDLE_HIDE_MS);
+    }, { capture: true, passive: true });
+    // Pointer left the page entirely (no element it moved to).
+    document.addEventListener("pointerout", (event) => {
+        if (!event.relatedTarget)
+            hide();
+    }, { capture: true, passive: true });
+    window.addEventListener("blur", hide);
     const stopButton = createOverlayButton(document, "stream-channeler-stop-btn", "Stop Auto Control", STOP_ICON, () => {
         stopAutoControl();
         stopButton.style.opacity = "0.5";
@@ -1310,14 +1678,12 @@ function mountPlayerControls(config) {
         if (span)
             span.textContent = "Auto Control Stopped";
     });
-    // Toggle the fake fullscreen; the icon/label flip to reflect the next action.
+    // Restore control: only shown while the video is expanded. Once the video is
+    // back at its original size there's no button (no separate expand control).
     const restoreLabel = config.restoreLabel ?? "Restore Original Size";
     let toggleButton;
     const updateToggle = () => {
-        const expanded = config.isExpanded();
-        const label = expanded ? restoreLabel : "Expand Video";
-        toggleButton.title = label;
-        setButtonContent(document, toggleButton, expanded ? RESTORE_ICON : EXPAND_ICON, label);
+        toggleButton.style.display = config.isExpanded() ? "" : "none";
     };
     toggleButton = createOverlayButton(document, "stream-channeler-restore-btn", restoreLabel, RESTORE_ICON, () => {
         config.toggleExpand();
@@ -1412,6 +1778,118 @@ function initUrlChangePlugin(name) {
     createStopButton();
     watchUrlChange(LOG);
 }
+// How close to the end counts as finished. Sites that cut to a "next episode"
+// promo often never fire `ended`, but the video does reach its duration.
+const VIDEO_END_SLACK_S = 1;
+const VIDEO_POLL_MS = 1000;
+/**
+ * Generic plugin for the many streaming sites that play a plain <video> in an
+ * SPA: fake-fullscreen the player, mount the overlay controls, and signal the
+ * end of the episode when the video finishes (or, optionally, when the site
+ * auto-advances by navigating).
+ *
+ * The <video> is re-read on every poll rather than captured once, because these
+ * players routinely tear down and recreate the element (ad breaks, quality
+ * switches, next-episode transitions).
+ */
+async function initVideoPlugin(config) {
+    const LOG = `${REMOTE_LOG} [${config.name}]`;
+    // Only run the script if the tab was opened by Stream Channeler Remote.
+    const loading = GM_getValue("loadingTab", false);
+    if (!loading)
+        return;
+    GM_setValue("loadingTab", false);
+    const videoSelector = config.videoSelector ?? "video";
+    console.log(`${LOG} Tab opened by Stream Channeler Remote, initializing`);
+    let video;
+    try {
+        video = await waitForElement(videoSelector);
+    }
+    catch (error) {
+        console.warn(`${LOG} No video found; falling back to URL watching:`, error);
+        createStopButton();
+        watchUrlChange(LOG);
+        return;
+    }
+    // Fullscreen the wrapper that holds the site's own controls, not the bare
+    // <video> — otherwise the controls are left behind on the page.
+    let player = video;
+    for (const selector of config.playerSelectors ?? []) {
+        const match = video.closest(selector);
+        if (match) {
+            player = match;
+            break;
+        }
+    }
+    if (player === video)
+        player = video.parentElement ?? video;
+    console.log(`${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`);
+    try {
+        mountPlayerControls({
+            log: LOG,
+            isExpanded: () => player.classList.contains(FAKE_FULLSCREEN_CLASS),
+            toggleExpand: () => setFakeFullscreen(player, !player.classList.contains(FAKE_FULLSCREEN_CLASS)),
+            expandObserveTarget: player,
+        });
+        // These players keep restyling themselves while they lay out after load, so
+        // wait for that to settle or our fullscreen styles get overwritten.
+        await waitForQuiet(player);
+        setFakeFullscreen(player, true);
+        console.log(`${LOG} Fullscreen applied`);
+    }
+    catch (error) {
+        console.error(`${LOG} Controls/fullscreen setup failed:`, error);
+    }
+    if (config.autoplay ?? true) {
+        const current = document.querySelector(videoSelector);
+        if (current?.paused) {
+            current.play().catch((error) => {
+                console.warn(`${LOG} Autoplay was rejected:`, error);
+            });
+        }
+    }
+    watchVideoCompletion(LOG, videoSelector);
+    if (config.watchUrl)
+        watchUrlChange(LOG);
+    console.log(`${LOG} Watching for end`);
+}
+// Signal completion once the current <video> ends or reaches its duration. The
+// element is looked up fresh each tick so a recreated player is picked up.
+function watchVideoCompletion(log, videoSelector) {
+    let done = false;
+    let seenPlaying = false;
+    function finish(reason) {
+        if (done)
+            return;
+        done = true;
+        clearInterval(poll);
+        console.log(`${log} Video finished (${reason})`);
+        signalEpisodeEnded();
+    }
+    const poll = window.setInterval(() => {
+        const video = document.querySelector(videoSelector);
+        if (!video)
+            return;
+        // Attach `ended` once per element; recreated players get their own listener.
+        if (!video.dataset.scrEndWatched) {
+            video.dataset.scrEndWatched = "1";
+            video.addEventListener("ended", () => finish("ended event"));
+        }
+        // Only trust the near-end check after playback has actually started, so a
+        // player reporting a stale currentTime/duration on load can't end the
+        // episode before it begins.
+        if (video.currentTime > 0 && !video.paused)
+            seenPlaying = true;
+        if (!seenPlaying)
+            return;
+        const { currentTime, duration } = video;
+        if (Number.isFinite(duration) &&
+            duration > 0 &&
+            currentTime >= duration - VIDEO_END_SLACK_S) {
+            finish(`reached ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`);
+        }
+    }, VIDEO_POLL_MS);
+}
 
 
 /***/ },
@@ -1420,9 +1898,9 @@ function initUrlChangePlugin(name) {
 (module, __unused_webpack_exports, __webpack_require__) {
 
 var map = {
+	"./NHK World/index.ts": "./src/manage/NHK World/index.ts",
+	"./TMDB/index.ts": "./src/manage/TMDB/index.ts",
 	"./crunchyroll/index.ts": "./src/manage/crunchyroll/index.ts",
-	"./justwatch/index.ts": "./src/manage/justwatch/index.ts",
-	"./nhkworld/index.ts": "./src/manage/nhkworld/index.ts",
 	"./youtube/index.ts": "./src/manage/youtube/index.ts"
 };
 
@@ -1452,10 +1930,20 @@ webpackContext.id = "./src/manage sync recursive \\/index\\.ts$";
 (module, __unused_webpack_exports, __webpack_require__) {
 
 var map = {
+	"./Adult Swim/index.ts": "./src/playback/Adult Swim/index.ts",
+	"./Disney+/index.ts": "./src/playback/Disney+/index.ts",
+	"./HBO Max/index.ts": "./src/playback/HBO Max/index.ts",
+	"./HiDive/index.ts": "./src/playback/HiDive/index.ts",
+	"./Hulu/index.ts": "./src/playback/Hulu/index.ts",
+	"./NHK World/index.ts": "./src/playback/NHK World/index.ts",
+	"./Paramount+/index.ts": "./src/playback/Paramount+/index.ts",
+	"./Peacock/index.ts": "./src/playback/Peacock/index.ts",
+	"./Pluto TV/index.ts": "./src/playback/Pluto TV/index.ts",
+	"./Prime Video/index.ts": "./src/playback/Prime Video/index.ts",
+	"./The Roku Channel/index.ts": "./src/playback/The Roku Channel/index.ts",
+	"./Tubi/index.ts": "./src/playback/Tubi/index.ts",
 	"./crunchyroll/index.ts": "./src/playback/crunchyroll/index.ts",
-	"./hbomax/index.ts": "./src/playback/hbomax/index.ts",
 	"./netflix/index.ts": "./src/playback/netflix/index.ts",
-	"./nhkworld/index.ts": "./src/playback/nhkworld/index.ts",
 	"./youtube/index.ts": "./src/playback/youtube/index.ts"
 };
 
@@ -1481,37 +1969,40 @@ webpackContext.id = "./src/playback sync recursive \\/index\\.ts$";
 
 /***/ },
 
-/***/ "./src/manage/crunchyroll/matches.cjs"
+/***/ "./src/manage/NHK World/matches.cjs"
 (module) {
 
 module.exports = {
-  hostnames: ["crunchyroll.com"],
-  matches: ["https://www.crunchyroll.com/series/*"],
+  // Disabled — URL adding is currently limited to YouTube, Crunchyroll and TMDB.
+  hostnames: [],
+  matches: [],
+  // hostnames: ["nhk.or.jp"],
+  // matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
 };
 
 
 /***/ },
 
-/***/ "./src/manage/justwatch/matches.cjs"
+/***/ "./src/manage/TMDB/matches.cjs"
 (module) {
 
 module.exports = {
-  hostnames: ["justwatch.com"],
+  hostnames: ["themoviedb.org"],
   matches: [
-    "https://www.justwatch.com/*/tv-show/*",
-    "https://www.justwatch.com/*/movie/*",
+    "https://www.themoviedb.org/tv/*",
+    "https://www.themoviedb.org/movie/*",
   ],
 };
 
 
 /***/ },
 
-/***/ "./src/manage/nhkworld/matches.cjs"
+/***/ "./src/manage/crunchyroll/matches.cjs"
 (module) {
 
 module.exports = {
-  hostnames: ["nhk.or.jp"],
-  matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
+  hostnames: ["crunchyroll.com"],
+  matches: ["https://www.crunchyroll.com/series/*"],
 };
 
 
@@ -1533,18 +2024,33 @@ module.exports = {
 
 /***/ },
 
-/***/ "./src/playback/crunchyroll/matches.cjs"
+/***/ "./src/playback/Adult Swim/matches.cjs"
 (module) {
 
 module.exports = {
-  hostnames: ["crunchyroll.com"],
-  matches: ["https://www.crunchyroll.com/watch/*"],
+  hostnames: ["adultswim.com"],
+  // Episodes live at /videos/<show>/<episode>.
+  matches: ["https://www.adultswim.com/videos/*"],
 };
 
 
 /***/ },
 
-/***/ "./src/playback/hbomax/matches.cjs"
+/***/ "./src/playback/Disney+/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["disneyplus.com"],
+  matches: [
+    "https://www.disneyplus.com/play/*",
+    "https://www.disneyplus.com/*/video/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/HBO Max/matches.cjs"
 (module) {
 
 module.exports = {
@@ -1558,23 +2064,136 @@ module.exports = {
 
 /***/ },
 
+/***/ "./src/playback/HiDive/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["hidive.com"],
+  matches: [
+    "https://www.hidive.com/video/*",
+    "https://www.hidive.com/stream/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Hulu/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["hulu.com"],
+  matches: ["https://www.hulu.com/watch/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/NHK World/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["nhk.or.jp"],
+  matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Paramount+/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["paramountplus.com"],
+  matches: [
+    "https://www.paramountplus.com/shows/video/*",
+    "https://www.paramountplus.com/movies/video/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Peacock/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["peacocktv.com"],
+  // Episodes and movies live under /watch/asset/..., and playback under /watch/playback/...
+  matches: ["https://www.peacocktv.com/watch/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Pluto TV/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["pluto.tv"],
+  matches: ["https://pluto.tv/*/on-demand/*", "https://pluto.tv/*/live-tv/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Prime Video/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["primevideo.com", "amazon.com"],
+  matches: [
+    "https://www.primevideo.com/*",
+    "https://www.amazon.com/gp/video/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/The Roku Channel/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["therokuchannel.roku.com"],
+  matches: ["https://therokuchannel.roku.com/watch/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Tubi/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["tubitv.com"],
+  matches: [
+    "https://tubitv.com/movies/*",
+    "https://tubitv.com/tv-shows/*",
+    "https://tubitv.com/series/*",
+  ],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/crunchyroll/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["crunchyroll.com"],
+  matches: ["https://www.crunchyroll.com/watch/*"],
+};
+
+
+/***/ },
+
 /***/ "./src/playback/netflix/matches.cjs"
 (module) {
 
 module.exports = {
   hostnames: ["netflix.com"],
   matches: ["https://www.netflix.com/*"],
-};
-
-
-/***/ },
-
-/***/ "./src/playback/nhkworld/matches.cjs"
-(module) {
-
-module.exports = {
-  hostnames: ["nhk.or.jp"],
-  matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
 };
 
 
@@ -1701,19 +2320,18 @@ function updateButton() {
         return;
     }
     if (!button) {
-        // Place the button right after the "Next" button in the header, matching its
-        // styling.
-        const nextButton = document
-            .querySelector("svg.lucide-skip-forward")
-            ?.closest("button");
-        if (!nextButton?.parentElement)
+        // Place the button right after the "Comments" button in the channel toolbar,
+        // matching its styling.
+        const commentsButton = Array.from(document.querySelectorAll("button")).find((b) => b.querySelector("svg.lucide-message-square") &&
+            b.textContent.trim() === "Comments");
+        if (!commentsButton?.parentElement)
             return;
         button = document.createElement("button");
         button.id = "remote-control-btn";
-        button.className = nextButton.className;
+        button.className = commentsButton.className;
         button.setAttribute("data-slot", "button");
         button.addEventListener("click", handleButtonClick);
-        nextButton.after(button);
+        commentsButton.after(button);
     }
     const icon = running ? STOP_ICON_SVG : PLAY_ICON_SVG;
     const action = running ? "Stop Remote" : "Start Remote";
