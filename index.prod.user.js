@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name          Stream Channeler Remote
 // @namespace     https://streamchanneler.com/
-// @version       0.0.1
+// @version       0.0.2
 // @author        ryn.cx
 // @description   Companion for Stream Channeler that controls media playback and assists in channel creation.
 // @match         https://streamchanneler.com/channels
