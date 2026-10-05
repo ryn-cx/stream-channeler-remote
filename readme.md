@@ -8,7 +8,7 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 ## Install
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) or a similar userscript manager.
-2. Install [Stream Channeler Remote](https://ryn-cx.github.io/stream-channeler-tuner/index.prod.user.js).
+2. Install [Stream Channeler Remote](https://ryn-cx.github.io/stream-channeler-remote/index.prod.user.js).
 
 ## Supported Sites
 
