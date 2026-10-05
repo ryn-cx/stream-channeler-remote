@@ -1,7 +1,7 @@
 {
   "name": "stream-channeler-remote",
   "description": "Companion for Stream Channeler that controls media playback and assists in channel creation.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": {
     "name": "ryn.cx"
   },
