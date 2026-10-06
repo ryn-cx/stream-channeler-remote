@@ -6,7 +6,6 @@
 // @description   Companion for Stream Channeler that controls media playback and assists in channel creation.
 // @match         https://streamchanneler.com/channels
 // @match         https://streamchanneler.com/channels/*
-// @match         http://localhost:5173/*
 // @match         https://www.adultswim.com/videos/*
 // @match         https://www.amazon.com/gp/video/*
 // @match         https://www.crunchyroll.com/watch/*
