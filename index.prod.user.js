@@ -8,27 +8,28 @@
 // @match         https://streamchanneler.com/channels/*
 // @match         http://localhost:5173/*
 // @match         https://www.adultswim.com/videos/*
+// @match         https://www.amazon.com/gp/video/*
 // @match         https://www.crunchyroll.com/watch/*
-// @match         https://www.disneyplus.com/play/*
-// @match         https://www.disneyplus.com/*/video/*
+// @match         https://www.disneyplus.com/*/play/*
 // @match         https://play.hbomax.com/video/watch/*
+// @match         https://play.hbomax.com/movie/*
 // @match         https://www.hidive.com/video/*
 // @match         https://www.hidive.com/stream/*
 // @match         https://www.hulu.com/watch/*
 // @match         https://www3.nhk.or.jp/nhkworld/en/shows/*
-// @match         https://www.netflix.com/watch/*
+// @match         https://www.netflix.com/*
 // @match         https://www.paramountplus.com/shows/video/*
 // @match         https://www.paramountplus.com/movies/video/*
 // @match         https://www.peacocktv.com/watch/*
 // @match         https://pluto.tv/*/on-demand/*
 // @match         https://pluto.tv/*/live-tv/*
-// @match         https://www.primevideo.com/*
-// @match         https://www.amazon.com/gp/video/*
 // @match         https://therokuchannel.roku.com/watch/*
 // @match         https://tubitv.com/movies/*
 // @match         https://tubitv.com/tv-shows/*
 // @match         https://tubitv.com/series/*
 // @match         https://www.youtube.com/watch*
+// @match         https://www.primevideo.com/*
+// @match         https://www.amazon.com/gp/video/detail/*
 // @match         https://www.crunchyroll.com/series/*
 // @match         https://www.disneyplus.com/browse/*
 // @match         https://www.disneyplus.com/*/browse/*
@@ -47,10 +48,9 @@
 // @match         https://pluto.tv/*/on-demand/movies/*
 // @match         https://pluto.tv/*/shows/*
 // @match         https://pluto.tv/*/movies/*
-// @match         https://www.amazon.com/gp/video/detail/*
+// @match         https://therokuchannel.roku.com/details/*
 // @match         https://www.themoviedb.org/tv/*
 // @match         https://www.themoviedb.org/movie/*
-// @match         https://therokuchannel.roku.com/details/*
 // @match         https://www.youtube.com/@*
 // @match         https://www.youtube.com/channel/*
 // @match         https://www.youtube.com/c/*
@@ -60,6 +60,9 @@
 // @grant         GM_getValue
 // @grant         GM_addValueChangeListener
 // @grant         GM_deleteValue
+// @grant         GM_registerMenuCommand
+// @grant         GM_unregisterMenuCommand
+// @grant         unsafeWindow
 // @run-at        document-end
 // ==/UserScript==
 
@@ -77,12 +80,10 @@
 /* harmony export */   YG: () => (/* binding */ getChannelQueues),
 /* harmony export */   k2: () => (/* binding */ setChannelQueues)
 /* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 // TODO: Validate
-const LOG = "[Stream Channeler Remote]";
-// https://lucide.dev/icons/radio-tower
-const LOAD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-radio-tower"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><path d="M16.2 4.7a6.14 6.14 0 0 1 .8 7.5"/><path d="M19.1 1.9a10.14 10.14 0 0 1 0 14.2"/><path d="M9.56 14l-2.35 8.68"/><path d="M14.44 14l2.35 8.68"/><circle cx="12" cy="12" r="2"/></svg>`;
-// https://lucide.dev/icons/antenna
-const INSERT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-antenna-icon lucide-antenna"><path d="M2 12 7 2"/><path d="m7 12 5-10"/><path d="m12 12 5-10"/><path d="m17 12 5-10"/><path d="M4.5 7h15"/><path d="M12 16v6"/></svg>`;
+
+const log = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .createLogger */ .h)();
 function getChannelQueues() {
     return GM_getValue("antennaChannels", {});
 }
@@ -98,10 +99,10 @@ function setLastChannelId(channelId) {
 async function fetchChannelShowUrls(channelId) {
     const token = localStorage.getItem("access_token");
     if (!token)
-        throw new Error(`${LOG} No access_token in localStorage — log in to streamchanneler.com first`);
+        throw new Error(`No access_token in localStorage — log in to streamchanneler.com first`);
     const response = await fetch(`https://api.streamchanneler.com/api/v1/channels/${channelId}/shows`, { headers: { Authorization: `Bearer ${token}` } });
     if (!response.ok)
-        throw new Error(`${LOG} Failed to fetch shows for channel ${channelId}: ${response.status}`);
+        throw new Error(`Failed to fetch shows for channel ${channelId}: ${response.status}`);
     const data = (await response.json());
     return data.shows.map((s) => s.url);
 }
@@ -138,7 +139,7 @@ async function loadBlankChannels() {
     if (ids.length === 0) {
         // No channel links found on the page — usually means the site's DOM changed
         // or this isn't the channels page. Surface it instead of silently saving {}.
-        throw new Error(`${LOG} No channels found on the page. The channels list DOM may have changed, or you may not be logged in.`);
+        throw new Error(`No channels found on the page. The channels list DOM may have changed, or you may not be logged in.`);
     }
     // Fetch the shows already attached to each channel so plugins can detect when
     // the current page URL is already present on a channel. Use allSettled so one
@@ -153,7 +154,7 @@ async function loadBlankChannels() {
             totalShows += result.value.length;
         }
         else {
-            console.error(`${LOG} Failed to load shows for "${channels[id].name}":`, result.reason);
+            log.error(`Failed to load shows for "${channels[id].name}":`, result.reason);
             failed.push(channels[id].name);
         }
     });
@@ -166,7 +167,7 @@ async function loadBlankChannels() {
 function pasteQueue(dialog) {
     const textarea = dialog.querySelector("textarea");
     if (!textarea)
-        throw new Error(`${LOG} Textarea not found in bulk import modal`);
+        throw new Error("Textarea not found in bulk import modal");
     const channels = getChannelQueues();
     const output = {};
     for (const [id, channel] of Object.entries(channels)) {
@@ -176,7 +177,7 @@ function pasteQueue(dialog) {
     }
     textarea.value = JSON.stringify(output, null, 2);
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    console.log(`${LOG} Inserted URLs for ${Object.keys(output).length} channels`);
+    log.log(`Inserted URLs for ${Object.keys(output).length} channels`);
 }
 function addButtonsToModal(dialog) {
     const modalFooter = dialog.querySelector('[data-slot="dialog-footer"]');
@@ -186,17 +187,18 @@ function addButtonsToModal(dialog) {
         return;
     const existingBtn = modalFooter.querySelector("button");
     if (!existingBtn)
-        throw new Error(`${LOG} No button found in dialog footer`);
+        throw new Error("No button found in dialog footer");
     const btnClass = existingBtn.className;
     const loadBtn = document.createElement("button");
     loadBtn.id = "manage-load-btn";
     loadBtn.className = btnClass;
     loadBtn.setAttribute("data-slot", "button");
-    loadBtn.innerHTML = `${INSERT_ICON_SVG}Load Channels`;
+    // https://lucide.dev/icons/antenna
+    loadBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-antenna-icon lucide-antenna"><path d="M2 12 7 2"/><path d="m7 12 5-10"/><path d="m12 12 5-10"/><path d="m17 12 5-10"/><path d="M4.5 7h15"/><path d="M12 16v6"/></svg>Load Channels`;
     loadBtn.addEventListener("click", (e) => {
         e.preventDefault();
         loadBlankChannels().catch((err) => {
-            console.error(`${LOG} Load Channels failed:`, err);
+            log.error("Load Channels failed:", err);
             alert(err instanceof Error ? err.message : String(err));
         });
     });
@@ -204,7 +206,8 @@ function addButtonsToModal(dialog) {
     insertBtn.id = "manage-insert-btn";
     insertBtn.className = btnClass;
     insertBtn.setAttribute("data-slot", "button");
-    insertBtn.innerHTML = `${LOAD_ICON_SVG}Insert URLs`;
+    // https://lucide.dev/icons/radio-tower
+    insertBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-radio-tower"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><path d="M16.2 4.7a6.14 6.14 0 0 1 .8 7.5"/><path d="M19.1 1.9a10.14 10.14 0 0 1 0 14.2"/><path d="M9.56 14l-2.35 8.68"/><path d="M14.44 14l2.35 8.68"/><circle cx="12" cy="12" r="2"/></svg>Insert URLs`;
     insertBtn.addEventListener("click", (e) => {
         e.preventDefault();
         pasteQueue(dialog);
@@ -215,7 +218,7 @@ function addButtonsToModal(dialog) {
 function initManage() {
     if (location.pathname !== "/channels")
         return;
-    console.log(`${LOG} Watching for bulk import modal`);
+    log.debug("Watching for the bulk import modal");
     // The bulk import dialog is rendered inside a WinBox window, so locate it by its
     // title and use the enclosing window as the dialog root.
     new MutationObserver(() => {
@@ -253,7 +256,6 @@ __webpack_require__.r(__webpack_exports__);
 // path. Shows can also be linked as /rick-and-morty, so stored URLs of either
 // form are matched by the show slug.
 const SHOW_PATH_RE = /^\/videos\/[a-z0-9-]+\/?$/;
-const SHOW_SLUG_RE = /adultswim\.com\/(?:videos\/)?([a-z0-9-]+)\/?(?:[?#]|$)/;
 function init() {
     (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
         website_name: "Adult Swim",
@@ -261,7 +263,61 @@ function init() {
         urlRegex: SHOW_PATH_RE,
         waitSelector: "body",
         getCurrentUrl: () => `${location.origin}${location.pathname}`,
-        getMatchKey: (url) => url.match(SHOW_SLUG_RE)?.[1] ?? null,
+        getMatchKey: (url) => url.match(/adultswim\.com\/(?:videos\/)?([a-z0-9-]+)\/?(?:[?#]|$)/)?.[1] ?? null,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/manage/Amazon/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Amazon/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+// TODO: Validate
+
+
+// Title pages, optionally with a region prefix, a decorative name segment and a
+// trailing ref, e.g.
+//   https://www.primevideo.com/detail/0GTKUFQSFLP1YVFDMW9IR56I90
+//   https://www.primevideo.com/region/eu/detail/The-Boys/0KRGHGZCHKS920ZQGY5LBRF7MA/ref=atv_sr
+//   https://www.amazon.com/gp/video/detail/B0D9MYVLNM
+// Amazon's generic /dp/<id> product pages aren't included, since every product
+// on amazon.com uses them, not just videos.
+const TITLE_ID_RE = /\/detail\/(?:[^/?#]+\/)?([A-Z0-9]{10,})(?:[/?#]|$)/;
+function currentTitleUrl() {
+    const id = location.pathname.match(TITLE_ID_RE)?.[1];
+    if (!id)
+        return null;
+    // Queue the plain title URL the importer recognises, without the decorative
+    // name, region or ref segments.
+    return location.hostname.includes("amazon.com")
+        ? `https://www.amazon.com/gp/video/detail/${id}`
+        : `https://www.primevideo.com/detail/${id}`;
+}
+function isPlaybackActive() {
+    // Amazon plays over the title page without changing the URL. The web
+    // player covers the window while it's open.
+    return document.querySelector("#dv-web-player.dv-player-fullscreen") !== null;
+}
+function init() {
+    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
+        website_name: "Amazon",
+        buttonColor: "#00a8e1",
+        isValidPage: () => currentTitleUrl() !== null,
+        waitSelector: "body",
+        getCurrentUrl: () => currentTitleUrl() ?? location.href,
+        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
+        isPlaybackActive,
     });
 }
 
@@ -284,10 +340,6 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
-// Crunchyroll series URLs look like /series/GT00375170/the-food-diary-of-miss-maid.
-// Match by series ID so the highlight survives slug or trailing-slash differences
-// between the page URL and the URL stored against a channel.
-const SERIES_ID_RE = /\/series\/([A-Z0-9]+)/;
 function init() {
     (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
         website_name: "Crunchyroll",
@@ -295,7 +347,10 @@ function init() {
         urlRegex: /\/series\/[A-Z0-9]+/,
         waitSelector: "h1",
         getCurrentUrl: () => location.href,
-        getMatchKey: (url) => url.match(SERIES_ID_RE)?.[1] ?? null,
+        // Crunchyroll series URLs look like /series/GT00375170/the-food-diary-of-miss-maid.
+        // Match by series ID so the highlight survives slug or trailing-slash differences
+        // between the page URL and the URL stored against a channel.
+        getMatchKey: (url) => url.match(/\/series\/([A-Z0-9]+)/)?.[1] ?? null,
     });
 }
 
@@ -484,9 +539,6 @@ __webpack_require__.r(__webpack_exports__);
 // all-numeric id (e.g. /nhkworld/en/shows/2019439/). Only show pages should get
 // the "Add to Channel" button, so require a non-numeric trailing segment.
 const SHOW_PATH_RE = /^\/nhkworld\/en\/shows\/(?!\d+\/?$)[^/]+\/?$/;
-// Match by the show slug so the highlight survives trailing-slash differences
-// between the page URL and the URL stored against a channel.
-const SLUG_RE = /\/shows\/([^/]+)\/?$/;
 function init() {
     (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
         website_name: "NHK World",
@@ -494,7 +546,9 @@ function init() {
         urlRegex: SHOW_PATH_RE,
         waitSelector: ".pProgramHero__main",
         getCurrentUrl: () => location.href,
-        getMatchKey: (url) => url.match(SLUG_RE)?.[1] ?? null,
+        // Match by the show slug so the highlight survives trailing-slash differences
+        // between the page URL and the URL stored against a channel.
+        getMatchKey: (url) => url.match(/\/shows\/([^/]+)\/?$/)?.[1] ?? null,
     });
 }
 
@@ -635,6 +689,7 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
+const ITEM_ID = "[0-9a-f]{24}";
 // Every page sits under a locale segment, e.g.
 //   https://pluto.tv/en/on-demand/series/5ef05c6acdce3c001a779a79/details
 //   https://pluto.tv/us/on-demand/series/5ef05c6acdce3c001a779a79/season/1
@@ -642,9 +697,7 @@ __webpack_require__.r(__webpack_exports__);
 //   https://pluto.tv/us/movies/68a54f49df1220b53566f16e/
 //   https://pluto.tv/us/shows/washed/
 // Season and episode pages are read as their series.
-const LOCALE = "(?:/[a-z]{2}(?:-[a-z]{2})?)?";
-const ITEM_ID = "[0-9a-f]{24}";
-const TITLE_PATH_RE = new RegExp(`^${LOCALE}(?:` +
+const TITLE_PATH_RE = new RegExp(`^(?:/[a-z]{2}(?:-[a-z]{2})?)?(?:` +
     `/on-demand/series/${ITEM_ID}(?:/season/\\d+(?:/episode/${ITEM_ID})?)?(?:/details)?` +
     `|(?:/on-demand)?/movies/${ITEM_ID}(?:/details)?` +
     `|/shows/[a-z0-9-]+` +
@@ -668,7 +721,7 @@ function init() {
 
 /***/ },
 
-/***/ "./src/manage/Prime Video/index.ts"
+/***/ "./src/manage/Roku/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -679,36 +732,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Prime Video/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Roku/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
 
-// Title pages, optionally with a region prefix, a decorative name segment and a
-// trailing ref, e.g.
-//   https://www.primevideo.com/detail/0GTKUFQSFLP1YVFDMW9IR56I90
-//   https://www.primevideo.com/region/eu/detail/The-Boys/0KRGHGZCHKS920ZQGY5LBRF7MA/ref=atv_sr
-//   https://www.amazon.com/gp/video/detail/B0D9MYVLNM
-// Amazon's generic /dp/<id> product pages aren't included, since every product
-// on amazon.com uses them, not just videos.
-const TITLE_ID_RE = /\/detail\/(?:[^/?#]+\/)?([A-Z0-9]{10,})(?:[/?#]|$)/;
-function currentTitleUrl() {
-    const id = location.pathname.match(TITLE_ID_RE)?.[1];
-    if (!id)
-        return null;
-    // Queue the plain title URL the importer recognises, without the decorative
-    // name, region or ref segments.
-    return location.hostname.includes("amazon.com")
-        ? `https://www.amazon.com/gp/video/detail/${id}`
-        : `https://www.primevideo.com/detail/${id}`;
-}
+// Series and movies share one page format; the slug after the id is decorative,
+// and a season appends its number to the id, e.g.
+//   https://therokuchannel.roku.com/details/db1607f1cff2522bb795382bb4b5bcae/fawlty-towers
+const TITLE_PATH_RE = /^\/details\/[0-9a-f]{32}(?:-\d+)?(?:\/[^/]+)?\/?$/;
+const TITLE_ID_RE = /\/(?:details|watch)\/([0-9a-f]{32}(?:-\d+)?)/;
 function init() {
     (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
-        website_name: "Prime Video",
-        buttonColor: "#00a8e1",
-        isValidPage: () => currentTitleUrl() !== null,
+        website_name: "Roku",
+        buttonColor: "#6c3c97",
+        urlRegex: TITLE_PATH_RE,
         waitSelector: "body",
-        getCurrentUrl: () => currentTitleUrl() ?? location.href,
+        getCurrentUrl: () => `${location.origin}${location.pathname}`,
         getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
     });
 }
@@ -758,41 +798,6 @@ function init() {
         // plain canonical title URL.
         getCurrentUrl: () => `${location.origin}${location.pathname}`,
         getMatchKey: extractTitleKey,
-    });
-}
-
-
-/***/ },
-
-/***/ "./src/manage/The Roku Channel/index.ts"
-(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
-/* harmony export */ });
-/* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/The Roku Channel/matches.cjs");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
-// TODO: Validate
-
-
-// Series and movies share one page format; the slug after the id is decorative,
-// and a season appends its number to the id, e.g.
-//   https://therokuchannel.roku.com/details/db1607f1cff2522bb795382bb4b5bcae/fawlty-towers
-const TITLE_PATH_RE = /^\/details\/[0-9a-f]{32}(?:-\d+)?(?:\/[^/]+)?\/?$/;
-const TITLE_ID_RE = /\/(?:details|watch)\/([0-9a-f]{32}(?:-\d+)?)/;
-function init() {
-    (0,_manage_plugin__WEBPACK_IMPORTED_MODULE_0__/* .initManagePlugin */ .v)({
-        website_name: "The Roku Channel",
-        buttonColor: "#6c3c97",
-        urlRegex: TITLE_PATH_RE,
-        waitSelector: "body",
-        getCurrentUrl: () => `${location.origin}${location.pathname}`,
-        getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
     });
 }
 
@@ -853,12 +858,11 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
-// YouTube channels are reachable via several URL forms (/@handle, /channel/UC…,
-// /c/…, /user/…) but the Stream Channeler API stores them as /channel/UC…, so
-// match by the channel's UC… id pulled from page metadata.
-const CHANNEL_ID_RE = /\/channel\/(UC[\w-]+)/;
 function extractChannelId(url) {
-    return url.match(CHANNEL_ID_RE)?.[1] ?? null;
+    // YouTube channels are reachable via several URL forms (/@handle, /channel/UC…,
+    // /c/…, /user/…) but the Stream Channeler API stores them as /channel/UC…, so
+    // match by the channel's UC… id pulled from page metadata.
+    return url.match(/\/channel\/(UC[\w-]+)/)?.[1] ?? null;
 }
 function getCurrentChannelId() {
     // The /@handle URL doesn't contain the UC… id. YouTube renders a canonical
@@ -903,13 +907,9 @@ function init() {
 // TODO: Validate
 
 
-// Every site renders the same compact widget pinned to the bottom-right corner
-// so the UI looks consistent regardless of the host page's layout.
-const FOOTER_STYLE = "position:fixed;bottom:16px;right:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:8px 10px;background:rgba(15,15,15,0.92);border:1px solid #303030;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:13px;";
-const SELECT_STYLE = "min-width:180px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
-const INPUT_STYLE = "width:130px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
+// TODO: Validate
 function initManagePlugin(config) {
-    const LOG = `[Stream Channeler Remote] [${config.website_name}]`;
+    const log = (0,_shared__WEBPACK_IMPORTED_MODULE_1__/* .createLogger */ .h)(config.website_name);
     const containerId = `manage-${config.website_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-container`;
     const textColor = config.textColor ?? "#fff";
     // Tracks the user dismissing the footer. Intentionally not persisted — the
@@ -918,7 +918,7 @@ function initManagePlugin(config) {
     // The resolved URL the footer was last built for. Survives a manual close so
     // that dismissing the footer keeps it hidden on the *same* page but navigating
     // to a new page brings it back. Comparing the *resolved* URL (not
-    // location.href) lets derived metadata like YouTube's canonical <link> settle
+    // location.href) lets derived metadata like YouTube's canonical <link> update
     // before rebuilding, avoiding a flash of stale highlight state.
     let lastSeenUrl = null;
     function createUI() {
@@ -928,21 +928,21 @@ function initManagePlugin(config) {
         const initialUrl = config.getCurrentUrl();
         lastSeenUrl = initialUrl;
         const currentKey = config.getMatchKey(initialUrl);
-        console.log(`${LOG} currentUrl=${initialUrl} currentKey=${currentKey}`);
+        log.debug("Current URL:", initialUrl, "match key:", currentKey);
         if (!currentKey) {
-            console.warn(`${LOG} Could not extract a match key from the current page — highlight will be skipped`);
+            log.warn("Could not extract a match key from the current page; channels won't be highlighted");
         }
         const isOnChannel = (channelName, showUrls) => {
             if (!currentKey)
                 return false;
             const urls = showUrls ?? [];
             if (urls.length === 0) {
-                console.log(`${LOG} Channel "${channelName}" has no showUrls loaded (run "Load Channels" on /channels to populate)`);
+                log.debug(`Channel "${channelName}" has no shows loaded (run "Load Channels" on /channels to load them)`);
                 return false;
             }
             const showKeys = urls.map(config.getMatchKey);
             const match = showKeys.includes(currentKey);
-            console.log(`${LOG} Channel "${channelName}": ${urls.length} shows, keys=${JSON.stringify(showKeys)}, match=${match}`);
+            log.debug(`Channel "${channelName}": ${urls.length} shows, match: ${match}, keys:`, showKeys);
             return match;
         };
         const optionTextFor = (channel) => {
@@ -951,14 +951,19 @@ function initManagePlugin(config) {
         };
         const container = document.createElement("div");
         container.id = containerId;
-        container.style.cssText = FOOTER_STYLE;
+        // Every site renders the same compact widget pinned to the bottom-right corner
+        // so the UI looks consistent regardless of the host page's layout.
+        container.style.cssText =
+            "position:fixed;bottom:16px;right:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:8px 10px;background:rgba(15,15,15,0.92);border:1px solid #303030;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:13px;" +
+                _shared__WEBPACK_IMPORTED_MODULE_1__/* .FADE_HIDDEN_STYLE */ .oU;
         const title = document.createElement("span");
         title.id = "manage-title";
         title.textContent = "Stream Channeler Remote";
         title.style.cssText = "color:#fff;font-weight:600;white-space:nowrap;";
         const select = document.createElement("select");
         select.id = "manage-channel-select";
-        select.style.cssText = SELECT_STYLE;
+        select.style.cssText =
+            "min-width:180px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
         for (const [id, channel] of channelEntries) {
             const option = document.createElement("option");
             option.value = id;
@@ -983,7 +988,8 @@ function initManagePlugin(config) {
             sourceInput.id = "manage-source-input";
             sourceInput.type = "text";
             sourceInput.placeholder = "Source (optional)";
-            sourceInput.style.cssText = INPUT_STYLE;
+            sourceInput.style.cssText =
+                "width:130px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
         }
         const btn = document.createElement("button");
         btn.id = "manage-add-btn";
@@ -1004,7 +1010,7 @@ function initManagePlugin(config) {
             if (!channel)
                 return;
             if (channel.urls.includes(fullUrl)) {
-                console.log(`${LOG} URL already queued for channel "${channel.name}"`);
+                log.log(`URL already queued for channel "${channel.name}"`);
                 btn.textContent = "Already Added";
                 setTimeout(() => {
                     btn.textContent = "Add to Channel";
@@ -1013,7 +1019,7 @@ function initManagePlugin(config) {
             }
             channel.urls.push(fullUrl);
             (0,_manage__WEBPACK_IMPORTED_MODULE_0__/* .setChannelQueues */ .k2)(allChannels);
-            console.log(`${LOG} Added "${fullUrl}" to channel "${channel.name}" (${channel.urls.length} total)`);
+            log.log(`Added "${fullUrl}" to channel "${channel.name}" (${channel.urls.length} total)`);
             const option = select.querySelector(`option[value="${channelId}"]`);
             if (option)
                 option.textContent = optionTextFor(channel);
@@ -1040,7 +1046,7 @@ function initManagePlugin(config) {
         container.appendChild(btn);
         container.appendChild(closeBtn);
         document.body.appendChild(container);
-        console.log(`${LOG} UI inserted with ${channelEntries.length} channels`);
+        log.debug(`UI inserted with ${channelEntries.length} channels`);
     }
     function removeUI() {
         document.getElementById(containerId)?.remove();
@@ -1053,7 +1059,7 @@ function initManagePlugin(config) {
     function ensureUI() {
         if (closed)
             return;
-        if (!isValidPage()) {
+        if (!isValidPage() || config.isPlaybackActive?.()) {
             removeUI();
             return;
         }
@@ -1072,17 +1078,18 @@ function initManagePlugin(config) {
         }
         ensureUI();
     }
-    console.log(`${LOG} Initializing on ${location.href}`);
+    log.debug("Initializing on", location.href);
     (0,_shared__WEBPACK_IMPORTED_MODULE_1__/* .waitForElement */ .xk)(config.waitSelector)
         .then(() => {
         ensureUI();
+        (0,_shared__WEBPACK_IMPORTED_MODULE_1__/* .fadeWhenIdle */ .Bc)(() => document.getElementById(containerId));
         new MutationObserver(onMutation).observe(document.body, {
             childList: true,
             subtree: true,
         });
     })
         .catch(() => {
-        console.log(`${LOG} Could not find anchor element`);
+        log.warn(`Could not find "${config.waitSelector}" to insert the UI`);
     });
 }
 
@@ -1102,22 +1109,69 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Adult Swim/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
-// TODO: Validate
 
 
 function init() {
-    // Adult Swim advances to the next episode by navigating to a new /videos/
-    // URL, so the URL change is the primary end signal; the video's own end is a
-    // fallback.
     (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
         name: "Adult Swim",
-        // Adult Swim's ASVP player nests root > .top-container >
-        // .top-player-container > <video>, and mounts its controls outside
-        // .top-player-container. The root's class is a hashed CSS module name, so
-        // find it as the parent of .top-container.
-        playerSelectors: [":has(> .top-container)", ".top-container"],
-        watchUrl: true,
+        playerToFullscreen: [":has(> .top-container)", ".top-container"],
+        // A small delay is required to avoid cutting off the end of the video. This will
+        // trigger before Adult Swim is able to change the URL after the video ends.
+        watchForVideoForCompletion: true,
     });
+}
+
+
+/***/ },
+
+/***/ "./src/playback/Amazon/index.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
+/* harmony export */   init: () => (/* binding */ init),
+/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */ });
+/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Amazon/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+
+
+const videoSelector = "#dv-web-player video";
+const hideNextUpButton = ".atvwebplayersdk-nextupcard-show .atvwebplayersdk-nextupcardhide-button";
+const stopAutoplayButton = 'button[aria-label="Stop autoplay"]';
+const hideNextUp = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)(hideNextUpButton);
+const stopAutoplay = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)(stopAutoplayButton);
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[aria-label="Skip Intro"]');
+const player = {
+    name: "Amazon",
+    videoSelector,
+};
+// TODO: Validate
+function init() {
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            // hideNextUpButton is shown at the end of a series or movie.
+            // stopAutoplayButton is shown at the end of an episode that has an episode
+            // following it.
+            endSelector: [hideNextUpButton, stopAutoplayButton],
+            clickButtons: introButtons,
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            // hideNextUpButton is shown at the end of a series or movie.
+            // stopAutoplayButton is shown at the end of an episode that has an episode
+            // following it.
+            clickButtons: [...introButtons, hideNextUp, stopAutoplay],
+            watchForVideoForCompletion: true,
+        });
+    }
 }
 
 
@@ -1136,45 +1190,41 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Crunchyroll/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+
+
 // TODO: Validate
-
-
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [Crunchyroll]`;
-// Crunchyroll uses a native Bitmovin player: a <video id="bitmovinplayer-video-*">
-// inside the ".video-player-wrapper" (which also holds Crunchyroll's controls).
-const VIDEO_SELECTOR = 'video[id^="bitmovinplayer-video"]';
-async function init() {
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    // Mount the overlay controls (stop + fullscreen toggle) once the player exists,
-    // and auto-expand. Fake-fullscreen the Bitmovin container so its own controls
-    // come along; fall back to the video's parent if the container class differs.
-    try {
-        const video = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(VIDEO_SELECTOR);
-        // Fullscreen the whole player wrapper (which holds Crunchyroll's controls),
-        // not just the video container — otherwise the controls are left behind.
-        const player = video.closest(".video-player-wrapper") ??
-            video.closest("#player-container") ??
-            video.closest(".bitmovinplayer-container") ??
-            video.parentElement ??
-            video;
-        console.log(`${LOG} Fullscreen target: <${player.tagName.toLowerCase()} class="${player.className}">`);
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .mountPlayerControls */ .Fy)({
-            log: LOG,
-            isExpanded: () => player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK),
-            toggleExpand: () => (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, !player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK)),
-            expandObserveTarget: player,
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[aria-label="Skip Intro"]:not([aria-hidden="true"])');
+// TODO: Validate
+const skipCredits = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[aria-label="Skip Credits"]:not([aria-hidden="true"])');
+// TODO: Validate
+function init() {
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            name: "Crunchyroll",
+            playerToFullscreen: [".video-player-wrapper"],
+            // Episodes in the middle of a series automatically navigate to the next one.
+            // watchUrl: true,
+            // The last episode of a series opens a recommendations dialog instead of changing
+            // the URL.
+            // endSelector: "dialog.erc-end-slate-recommendations-carousel[open]",
+            watchForVideoForCompletion: true,
+            clickButtons: [...introButtons, skipCredits],
         });
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, true);
     }
-    catch (error) {
-        console.warn(`${LOG} Player not found; controls not mounted:`, error);
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            name: "Crunchyroll",
+            playerToFullscreen: [".video-player-wrapper"],
+            // Episodes in the middle of a series automatically navigate to the next one.
+            // watchUrl: true,
+            // The last episode of a series opens a recommendations dialog instead of changing
+            // the URL.
+            // endSelector: "dialog.erc-end-slate-recommendations-carousel[open]",
+            watchForVideoForCompletion: true,
+            clickButtons: introButtons,
+        });
     }
-    // Crunchyroll auto-advances by navigating, so detect the URL change.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .watchUrlChange */ .Jm)(LOG);
 }
 
 
@@ -1193,21 +1243,64 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Disney+/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
+
+
 // TODO: Validate
-
-
+const deepButtons = (root) => [
+    ...Array.from(root.querySelectorAll("button")),
+    ...Array.from(root.querySelectorAll("*")).flatMap((el) => el.shadowRoot ? deepButtons(el.shadowRoot) : []),
+];
+// TODO: Validate
+const findButton = (overlay, label) => {
+    const shadowRoot = document.querySelector(overlay)?.shadowRoot;
+    if (!shadowRoot)
+        return undefined;
+    return deepButtons(shadowRoot).find((button) => label.test(button.getAttribute("aria-label") ?? "") ||
+        label.test(button.textContent?.trim() ?? ""));
+};
+// TODO: Validate
+const click = (button) => {
+    button?.click();
+    return button !== undefined;
+};
+// TODO: Validate
+const isEndCardCloseShown = () => findButton("end-card-overlay", /^Close$/) !== undefined;
+// TODO: Validate
+const closeEndCard = () => click(findButton("end-card-overlay", /^Close$/));
+// TODO: Validate
+const clickSkipButton = (label) => () => {
+    const skip = findButton("skip-overlay", label);
+    return click(skip?.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+        ? skip
+        : undefined);
+};
+// TODO: Validate
+const clickSkipCredits = clickSkipButton(/skip credits/i);
+// TODO: Validate
+const skipIntro = clickSkipButton(/skip intro/i);
+// TODO: Validate
 function init() {
-    // Disney+ mounts its player (and controls) inside the BTM media client
-    // container that wraps the <video>.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Disney+",
-        playerSelectors: [
-            ".btm-media-clients",
-            ".btm-media-overlays-container",
-            "#hivePlayer",
-            ".video-container",
-        ],
-    });
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            name: "Disney+",
+            // Detect the end of a series or the end of a movie.
+            endSelector: '[data-testid="explore-post-play-view"]',
+            isEnded: isEndCardCloseShown,
+            // Sometimes there is a skip credits button sometimes there is not, it just
+            // depends on the media.
+            clickButtons: [...introButtons, clickSkipCredits],
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            name: "Disney+",
+            clickButtons: [...introButtons, closeEndCard],
+            // The URL eventually changes, but there may be a small delay and some credits are
+            // actually skipped.
+            watcForhUrlChange: true,
+        });
+    }
 }
 
 
@@ -1229,15 +1322,59 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
-// Wrappers that hold both the <video> and HBO Max's own controls. When none
-// match, the outermost wrapper the same size as the video is used.
-const HBO_MAX_PLAYER_SELECTORS = [
-    '[data-testid="player-ux-container"]',
-    '[class*="PlayerContainer"]',
-];
+function waitForWatchPage() {
+    return new Promise((resolve) => {
+        const poll = window.setInterval(() => {
+            if (location.pathname.startsWith("/video/watch/")) {
+                clearInterval(poll);
+                resolve();
+            }
+        }, 250);
+    });
+}
+// TODO: Validate
+// Movies link to their title page (/movie/<id>) rather than the player, so
+// click Watch Now and wait for HBO Max to navigate to /video/watch/.
+async function startMovie(log) {
+    if (location.pathname.startsWith("/movie/")) {
+        // The movie page's "Watch Now" button. The Trailer button shares its
+        // data-testid, but only Watch Now has the LOUD (primary) appearance.
+        const watchNow = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)('button[data-testid="play_button"][data-appearance="LOUD"]');
+        log.log("Clicking Watch Now");
+        watchNow.click();
+        await waitForWatchPage();
+    }
+}
+// TODO: Validate
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('[data-testid="skip"]:not([style*="hidden"]) button[aria-label="Skip Intro"]');
+// TODO: Validate
+const cancelAutoplay = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[data-testid="player-ux-up-next-dismiss"]');
+// TODO: Validate
+const player = {
+    name: "HBO Max",
+    playerToFullscreen: ['[data-testid="playerContainer"]'],
+    start: startMovie,
+};
+// TODO: Validate
 function init() {
-    // HBO Max advances to the next episode by navigating to a new /video/watch/ URL.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("HBO Max", HBO_MAX_PLAYER_SELECTORS);
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            // Middle episode of a series.
+            endSelector: 'button[data-testid="player-ux-up-next-button"]',
+            clickButtons: introButtons,
+            // Last episode of a series/movies.
+            watchForVideoForCompletion: true,
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            clickButtons: [...introButtons, cancelAutoplay],
+            watchForVideoForCompletion: true,
+        });
+    }
 }
 
 
@@ -1259,17 +1396,11 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
+// TODO: Validate
 function init() {
-    // HiDive runs a video.js-based player, so the ".video-js" wrapper holds both
-    // the video and the site's controls.
     (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
         name: "HiDive",
-        playerSelectors: [
-            ".video-js",
-            "#video-player",
-            ".player-container",
-            ".vjs-player",
-        ],
+        watchForVideoForCompletion: true,
     });
 }
 
@@ -1292,19 +1423,23 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
+// TODO: Validate
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[data-testid="player-skip-button"]', /skip intro/i);
+// TODO: Validate
+const player = {
+    name: "Hulu",
+    watchForVideoForCompletion: true,
+    debug: true,
+};
+// TODO: Validate
 function init() {
-    // Hulu advances to the next episode by navigating to a new /watch/ URL, so
-    // the URL change is the primary end signal; the video's own end is a fallback.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Hulu",
-        playerSelectors: [
-            "#content-video-player",
-            ".VideoPlayerContainer",
-            ".PlayerContainer",
-            '[data-testid="player-container"]',
-        ],
-        watchUrl: true,
-    });
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({ ...player, clickButtons: introButtons });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({ ...player, clickButtons: introButtons });
+    }
 }
 
 
@@ -1326,131 +1461,33 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [NHK World]`;
-function getPlayerDocument() {
-    const iframe = document.querySelector('iframe[src*="world-player"]');
-    return iframe?.contentDocument ?? null;
-}
-// Like waitForElement, but searches inside the player iframe's document. The
-// iframe element and its document are re-read on every poll because the document
-// is replaced as the iframe navigates to the player.
-async function waitForPlayerElement(selector, timeoutMs = 15000) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        const element = getPlayerDocument()?.querySelector(selector) ?? null;
-        if (element)
-            return element;
-        await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(250);
-    }
-    throw new Error(`${LOG} Timed out waiting for "${selector}" in player iframe`);
-}
-// The play/pause control's text and title flip to "Replay" once the video
-// finishes, which is how we detect completion.
-function isReplay(button) {
-    if (button.getAttribute("title") === "Replay")
-        return true;
-    const text = button.querySelector(".vjs-control-text")?.textContent?.trim();
-    return text === "Replay";
-}
-// Whether the video has started playing. NHK removes the "Watch Now" overlay
-// (.tVideoEpisodePlayer__watchNow, which holds the WATCH NOW button) from the
-// top page once playback begins, leaving just the playing iframe. That overlay's
-// disappearance is the most reliable signal because it lives in the top
-// document, unlike the player's <video> which is buried in the iframe.
-function isPlaying() {
-    const overlay = document.querySelector(".tVideoEpisodePlayer__watchNow");
-    if (overlay === null || overlay.offsetParent === null)
-        return true;
-    // Fallback: the <video> inside the iframe reports active playback.
-    const video = getPlayerDocument()?.querySelector("video.vjs-tech");
-    return (video != null && !video.paused && !video.ended && video.readyState >= 2);
-}
-// NHK World does not autoplay — the video.js player is only mounted once the
-// user clicks "Watch Now". The button lives in the top-level show page (not the
-// iframe), and the click can land before the player is ready, so keep nudging
-// whichever start control is available until playback actually begins.
+// TODO: Validate
 async function startVideo() {
     const watchNow = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(".tVideoEpisodePlayer__watchNowBtn");
-    console.log(`${LOG} Watch Now button found, starting playback`);
     watchNow.click();
-    let attempt = 0;
-    while (!isPlaying()) {
-        await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(1000);
-        if (isPlaying())
-            break;
-        attempt++;
-        // The "Watch Now" button lives in the top page; once the player is mounted
-        // it exposes its own big play button inside the iframe. Click whichever is
-        // currently available to retry.
-        const trigger = document.querySelector(".tVideoEpisodePlayer__watchNowBtn") ??
-            getPlayerDocument()?.querySelector(".vjs-big-play-button") ??
-            null;
-        if (trigger) {
-            console.log(`${LOG} Not playing yet, retrying start (attempt ${attempt})`);
-            trigger.click();
-        }
-        else {
-            console.log(`${LOG} Not playing yet, no start control available (attempt ${attempt})`);
-        }
-    }
-    console.log(`${LOG} Playback confirmed`);
-}
-// Real fullscreen needs a user gesture, which an automated tab doesn't have.
-// Instead, fake it: NHK's own stylesheet pins
-// ".world-player-iframe.world-player-fullscreen" to cover the whole viewport
-// (position:fixed, 100vw/100dvh, z-index:9999) and hides body overflow, so just
-// add that class to the player iframe. No Fullscreen API, no gesture needed.
-async function fullscreenVideo() {
     const iframe = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(".world-player-iframe");
     iframe.classList.add("world-player-fullscreen");
-    console.log(`${LOG} Player expanded to cover the page`);
-}
-// Watch the play control inside the iframe for the "Replay" state, which signals
-// completion.
-async function watchForCompletion() {
-    const button = await waitForPlayerElement(".vjs-play-control");
-    console.log(`${LOG} Play control found, watching for completion`);
-    if (isReplay(button)) {
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .signalEpisodeEnded */ .e$)();
-        return;
+    for (let attempt = 0; attempt < 30; attempt++) {
+        await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(1000);
+        if (document.querySelector(".tVideoEpisodePlayer.is-show"))
+            return;
+        watchNow.click();
     }
-    const observer = new MutationObserver(() => {
-        if (isReplay(button)) {
-            observer.disconnect();
-            (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .signalEpisodeEnded */ .e$)();
-        }
-    });
-    observer.observe(button, {
-        attributes: true,
-        attributeFilter: ["title", "class"],
-        childList: true,
-        subtree: true,
-        characterData: true,
-    });
 }
-// Add the overlay controls, wiring NHK's fake fullscreen (a class on the player
-// iframe element, which lives in the top page) into the shared component.
-async function mountControls() {
-    const iframe = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(".world-player-iframe");
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .mountPlayerControls */ .Fy)({
-        log: LOG,
-        isExpanded: () => iframe.classList.contains("world-player-fullscreen"),
-        toggleExpand: () => {
-            iframe.classList.toggle("world-player-fullscreen");
-        },
-        expandObserveTarget: iframe,
-    });
-}
-async function init() {
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    await startVideo();
-    await fullscreenVideo();
-    await mountControls();
-    await watchForCompletion();
+// TODO: Validate
+const player = {
+    name: "NHKWorld",
+    start: startVideo,
+    watchForVideoForCompletion: 1,
+};
+// TODO: Validate
+function init() {
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)(player);
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)(player);
+    }
 }
 
 
@@ -1472,15 +1509,165 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
-// Wrappers that hold both the <video> and Netflix's own controls. When none
-// match, the outermost wrapper the same size as the video is used.
-const NETFLIX_PLAYER_SELECTORS = [
-    ".watch-video--player-view",
-    '[data-uia="watch-video"]',
-];
+const log = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .createLogger */ .h)("Netflix");
+// The profile to pick on Netflix's "Who's watching?" screen, and its PIN if the
+// profile is locked. Set from the userscript manager's menu.
+const PROFILE_NAME_KEY = "netflixProfileName";
+const PROFILE_PIN_KEY = "netflixProfilePin";
+// From Netflix's stylesheet: the "Who's watching?" gate lists profiles as
+// .profiles-gate-container li a > .profile-name, and a locked profile asks for
+// its PIN in .profile-pin-prompt .pin-number-input (one box per digit).
+const PROFILE_LINK_SELECTOR = [
+    ".profiles-gate-container li a",
+    ".list-profiles li a",
+    "a.profile-link",
+    '[data-uia="profile-link"]',
+    '[data-uia^="action-select-profile"]',
+    '[data-uia^="profile-selector+tile"]',
+].join(", ");
+const PIN_INPUT_SELECTOR = [
+    ".profile-pin-prompt .pin-number-input",
+    ".pin-input-container input",
+    'input[data-uia*="pin" i]',
+    'input[class*="pin" i]',
+    'input[inputmode="numeric"]',
+    'input[type="tel"]',
+    'input[maxlength="1"]',
+].join(", ");
+// TODO: Validate
+function registerSettingsMenu() {
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .addMenuCommand */ .iq)("settings", "Set Netflix profile", () => {
+        const name = window.prompt("Netflix profile to select automatically (leave empty to disable):", GM_getValue(PROFILE_NAME_KEY, ""));
+        if (name === null)
+            return;
+        GM_setValue(PROFILE_NAME_KEY, name.trim());
+        const pin = window.prompt("4-digit PIN for that profile (leave empty if it has no PIN):", GM_getValue(PROFILE_PIN_KEY, ""));
+        if (pin === null)
+            return;
+        GM_setValue(PROFILE_PIN_KEY, pin.trim());
+    });
+}
+// Type a value into a React-controlled input: set it through the native setter
+// (so React notices the change) and fire the events Netflix listens for.
+function typeInto(input, value) {
+    input.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true }));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keyup", { key: value, bubbles: true }));
+}
+function isWatchPage() {
+    return location.pathname.startsWith("/watch/");
+}
+// TODO: Validate
+function isProfileGateShown() {
+    return (document.querySelector(PROFILE_LINK_SELECTOR) !== null ||
+        document.querySelector(PIN_INPUT_SELECTOR) !== null);
+}
+// TODO: Validate
+async function enterPin(pin) {
+    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(PIN_INPUT_SELECTOR, 5000);
+    // Let the prompt finish rendering before typing.
+    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(500);
+    const inputs = Array.from(document.querySelectorAll(PIN_INPUT_SELECTOR));
+    // One box per digit. Pause between digits so the prompt can move focus.
+    for (const [i, digit] of pin.split("").entries()) {
+        if (inputs[i])
+            typeInto(inputs[i], digit);
+        await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(150);
+    }
+    log.log("Entered profile PIN");
+}
+// TODO: Validate
+async function chooseProfile() {
+    const name = GM_getValue(PROFILE_NAME_KEY, "");
+    if (!name) {
+        log.warn("No Netflix profile set; waiting for one to be picked");
+        return;
+    }
+    // Clicking as soon as the picker renders does nothing, so give it a moment.
+    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(1000);
+    const profile = Array.from(document.querySelectorAll(PROFILE_LINK_SELECTOR)).find((link) => (link.querySelector('.profile-name, [data-uia="profile-name"]') ?? link).textContent
+        ?.trim()
+        .toLowerCase() === name.toLowerCase());
+    if (!profile) {
+        log.warn(`Profile "${name}" not found; waiting for one to be picked`);
+        return;
+    }
+    log.log(`Selecting profile "${name}"`);
+    profile.click();
+    const pin = GM_getValue(PROFILE_PIN_KEY, "");
+    if (pin)
+        await enterPin(pin).catch(() => log.warn("No PIN prompt found"));
+}
+// TODO: Validate
+// Netflix may answer the episode URL with its "Who's watching?" picker,
+// redirecting to /browse first. Get past it, then make sure the tab ends up on
+// the episode so playback can start unattended.
+async function getPastProfileGate() {
+    const deadline = Date.now() + 15000;
+    while (!isProfileGateShown()) {
+        if (Date.now() > deadline ||
+            (isWatchPage() && document.querySelector("video")))
+            return;
+        await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(250);
+    }
+    await chooseProfile();
+    // Wait for the picker (and any PIN prompt) to go away, however the profile
+    // was picked. Give the user plenty of time when picking by hand.
+    while (isProfileGateShown())
+        await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(250);
+    // Let Netflix finish switching profiles before navigating.
+    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(1000);
+    if (isWatchPage())
+        return;
+    const target = GM_getValue("loadingUrl", null);
+    if (!target)
+        return;
+    log.log("Returning to", target, "after choosing the profile");
+    // The reload runs the plugin again, so let it claim the tab.
+    GM_setValue("loadingTab", true);
+    location.assign(target);
+    // Never resolve, so the URL watcher doesn't start on the way out.
+    await new Promise(() => { });
+}
+// TODO: Validate
+// TODO: Validate
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[data-uia="player-skip-intro"]');
+// TODO: Validate
+const watchCreditsButton = 'button[data-uia="watch-credits-seamless-button"]';
+// TODO: Validate
+const watchCredits = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)(watchCreditsButton);
+const player = {
+    name: "Netflix",
+    playerToFullscreen: [".watch-video--player-view", '[data-uia="watch-video"]'],
+    start: getPastProfileGate,
+    // Required for playing credits and for playing the last episode of a series and
+    // movies without the credits.
+    watchForVideoForCompletion: true,
+};
+// TODO: Validate
 function init() {
-    // Netflix advances to the next episode by navigating to a new /watch/ URL.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initUrlChangePlugin */ .F5)("Netflix", NETFLIX_PLAYER_SELECTORS);
+    registerSettingsMenu();
+    if (!isWatchPage()) {
+        if (GM_getValue("loadingTab", false))
+            void getPastProfileGate();
+        return;
+    }
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            endSelector: watchCreditsButton,
+            clickButtons: introButtons,
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            clickButtons: [...introButtons, watchCredits],
+        });
+    }
 }
 
 
@@ -1502,16 +1689,41 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
+// TODO: Validate
+const findInEndcard = (selector) => document
+    .querySelector("endcard-web-component")
+    ?.shadowRoot?.querySelector(selector) ?? null;
+// TODO: Validate
+const isEndcardShown = () => findInEndcard(".endcard") !== null;
+// TODO: Validate
+const closeEndcard = () => {
+    const close = findInEndcard(".endcard-close-button");
+    close?.click();
+    return close !== null;
+};
+// TODO: Validate
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button.skip-button.button_visible[data-skip="skip"]');
+// TODO: Validate
+const player = {
+    name: "Paramount+",
+    watchForVideoForCompletion: true,
+};
+// TODO: Validate
 function init() {
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Paramount+",
-        playerSelectors: [
-            ".aa-player-container",
-            "#player-container",
-            ".video-player-container",
-            ".player-wrapper",
-        ],
-    });
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            isEnded: isEndcardShown,
+            clickButtons: introButtons,
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            clickButtons: [...introButtons, closeEndcard],
+        });
+    }
 }
 
 
@@ -1533,19 +1745,31 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
+// TODO: Validate
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[data-testid="skip-button"][aria-label="Skip Intro"]');
+// TODO: Validate
+const cancelWatchNext = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[data-testid="binge-dismiss-button"]');
+// TODO: Validate
+const player = {
+    name: "Peacock",
+    watchForVideoForCompletion: true,
+};
+// TODO: Validate
 function init() {
-    // Peacock advances to the next episode by navigating to a new URL, so the URL
-    // change is the primary end signal; the video's own end is a fallback.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Peacock",
-        // When none match, the outermost wrapper the same size as the video is used.
-        playerSelectors: [
-            '[data-testid="playback-container"]',
-            ".playback-container",
-            '[class*="PlayerContainer"]',
-        ],
-        watchUrl: true,
-    });
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            endSelector: '[data-testid="vod-binge-container"]',
+            clickButtons: introButtons,
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            clickButtons: [...introButtons, cancelWatchNext],
+        });
+    }
 }
 
 
@@ -1567,22 +1791,63 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
+// TODO: Validate
+const endcard = ".base-container.show endcard-web-component";
+// TODO: Validate
+const enterTheatreMode = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[data-controls="theatreScreen"][aria-pressed="false"]');
+// TODO: Validate
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button.skip-button.button_visible[data-skip="skip"]', /skip intro/i);
+// TODO: Validate
+const closeEndcard = () => {
+    const close = document
+        .querySelector(endcard)
+        ?.shadowRoot?.querySelector(".endcard-close-button");
+    close?.click();
+    return Boolean(close);
+};
+// TODO: Validate
+const isInEndcard = (selector) => Array.from(document.querySelectorAll("endcard-web-component")).some((component) => component.shadowRoot?.querySelector(selector));
+// TODO: Validate
+const isUpNextShown = () => isInEndcard('.endcard-timer[aria-label^="Up Next" i]');
+// TODO: Validate
+const isRecommendationShown = () => isInEndcard(".endcard-footer .watch-button-text");
+// TODO: Validate
+const restoreCredits = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)(".player-wrapper.uec-credits-box .tween-down-thumbnail.show");
+// TODO: Validate
+const player = {
+    name: "Pluto TV",
+    watcForhUrlChange: true,
+    watchForVideoForCompletion: true,
+};
+// TODO: Validate
 function init() {
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Pluto TV",
-        playerSelectors: [
-            '[data-testid="video-player"]',
-            "#video-player",
-            ".video-player",
-            ".player-wrapper",
-        ],
-    });
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            endSelector: endcard,
+            isEnded: isUpNextShown,
+            clickButtons: [enterTheatreMode, ...introButtons],
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            isEnded: isRecommendationShown,
+            clickButtons: [
+                enterTheatreMode,
+                ...introButtons,
+                closeEndcard,
+                restoreCredits,
+            ],
+        });
+    }
 }
 
 
 /***/ },
 
-/***/ "./src/playback/Prime Video/index.ts"
+/***/ "./src/playback/Roku/index.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -1593,54 +1858,33 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Prime Video/matches.cjs");
+/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Roku/matches.cjs");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
 
-function init() {
-    // Prime Video plays inside its own web player SDK container, which also holds
-    // the site's controls, so that is what gets expanded.
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Prime Video",
-        playerSelectors: [
-            ".webPlayerSDKContainer",
-            ".webPlayerUIContainer",
-            "#dv-web-player",
-            ".dv-player-fullscreen",
-        ],
-    });
-}
-
-
-/***/ },
-
-/***/ "./src/playback/The Roku Channel/index.ts"
-(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
-/* harmony export */ });
-/* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/The Roku Channel/matches.cjs");
-/* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
-
-
+const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)("button.MuiButton-root", /skip introduction/i);
+// TODO: Validate
+const isWatchNextShown = () => Array.from(document.querySelectorAll("button.MuiButton-root")).some((button) => /watch next/i.test(button.textContent ?? ""));
+// TODO: Validate
+const player = {
+    name: "Roku",
+    watchForVideoForCompletion: true,
+};
+// TODO: Validate
 function init() {
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Roku Channel",
-        playerSelectors: [
-            '[data-testid="video-player"]',
-            "#video-player",
-            ".video-container",
-            ".player-container",
-        ],
-    });
+    const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            isEnded: isWatchNextShown,
+            clickButtons: introButtons,
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({ ...player, clickButtons: introButtons });
+    }
 }
 
 
@@ -1662,16 +1906,30 @@ __webpack_require__.r(__webpack_exports__);
 // TODO: Validate
 
 
+// TODO: Validate
+const enterTheatreMode = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)("button", /^(?!.*exit).*theat(er|re) mode/i);
+// TODO: Validate
+const hideUpNext = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)("div", /^hide$/i);
+// TODO: Validate
+const player = {
+    name: "Tubi",
+    watchForVideoForCompletion: true,
+};
+// TODO: Validate
 function init() {
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
-        name: "Tubi",
-        playerSelectors: [
-            "#video-player-container",
-            '[data-id="video-player"]',
-            ".video-player",
-            ".web-player",
-        ],
-    });
+    if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            endSelector: 'a[href*="autoplay=true"]',
+            clickButtons: [enterTheatreMode],
+        });
+    }
+    else {
+        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+            ...player,
+            clickButtons: [enterTheatreMode, hideUpNext],
+        });
+    }
 }
 
 
@@ -1692,64 +1950,15 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_matches_cjs__WEBPACK_IMPORTED_MODULE_1__);
 // TODO: Validate
 
-const LOG = `${_shared__WEBPACK_IMPORTED_MODULE_0__/* .REMOTE_LOG */ .og} [YouTube]`;
 
-// #movie_player holds the video and YouTube's own controls. The shared helper
-// fake-fullscreens it in place and lifts its ancestors' stacking so the player
-// (which YouTube's transformed layout would otherwise trap under the page)
-// floats on top.
-function mountControls(player) {
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .mountPlayerControls */ .Fy)({
-        log: LOG,
-        isExpanded: () => player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK),
-        toggleExpand: () => (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, !player.classList.contains(_shared__WEBPACK_IMPORTED_MODULE_0__/* .FAKE_FULLSCREEN_CLASS */ .HK)),
-        expandObserveTarget: player,
+// TODO: Validate
+function init() {
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
+        name: "YouTube",
+        videoSelector: "#movie_player video",
+        playerToFullscreen: ["#movie_player"],
+        endSelector: "#movie_player.ended-mode",
     });
-}
-// The player gains the "ended-mode" class once the video finishes, which is
-// how we detect completion.
-function watchForCompletion(player) {
-    const observer = new MutationObserver(() => {
-        if (player.classList.contains("ended-mode")) {
-            observer.disconnect();
-            (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .signalEpisodeEnded */ .e$)();
-        }
-    });
-    observer.observe(player, { attributes: true, attributeFilter: ["class"] });
-}
-async function init() {
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
-        return;
-    GM_setValue("loadingTab", false);
-    console.log(`${LOG} Tab opened by Stream Channeler Remote, initializing`);
-    // YouTube is a Polymer SPA — the player is created asynchronously and may not
-    // exist yet at document-end, so wait for it instead of grabbing it eagerly.
-    const player = await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)("#movie_player");
-    console.log(`${LOG} Player found`);
-    // Run each step independently so a failure in one doesn't block the others.
-    try {
-        mountControls(player);
-        console.log(`${LOG} Controls mounted`);
-    }
-    catch (error) {
-        console.error(`${LOG} mountControls failed:`, error);
-    }
-    // YouTube keeps restyling #movie_player while it lays the player out after load
-    // (it has player-resize-delay/transition experiments); applying our fullscreen
-    // styles during that window gets overwritten. Wait until it stops restyling the
-    // player so the fake fullscreen sticks.
-    await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForQuiet */ .PL)(player);
-    try {
-        (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .setFakeFullscreen */ .t7)(player, true);
-        console.log(`${LOG} Fullscreen applied`);
-    }
-    catch (error) {
-        console.error(`${LOG} setFakeFullscreen failed:`, error);
-    }
-    watchForCompletion(player);
-    console.log(`${LOG} Watching for end`);
 }
 
 
@@ -1760,21 +1969,91 @@ async function init() {
 
 "use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
-/* harmony export */   F5: () => (/* binding */ initUrlChangePlugin),
-/* harmony export */   Fy: () => (/* binding */ mountPlayerControls),
-/* harmony export */   HK: () => (/* binding */ FAKE_FULLSCREEN_CLASS),
-/* harmony export */   Jm: () => (/* binding */ watchUrlChange),
-/* harmony export */   PL: () => (/* binding */ waitForQuiet),
+/* harmony export */   Bc: () => (/* binding */ fadeWhenIdle),
+/* harmony export */   IP: () => (/* binding */ clickWhenShown),
 /* harmony export */   TD: () => (/* binding */ initVideoPlugin),
-/* harmony export */   e$: () => (/* binding */ signalEpisodeEnded),
-/* harmony export */   og: () => (/* binding */ REMOTE_LOG),
-/* harmony export */   t7: () => (/* binding */ setFakeFullscreen),
+/* harmony export */   V_: () => (/* binding */ registerSkipMenus),
+/* harmony export */   Xd: () => (/* binding */ shouldSkipCredits),
+/* harmony export */   _3: () => (/* binding */ shouldSkipIntros),
+/* harmony export */   h: () => (/* binding */ createLogger),
+/* harmony export */   iq: () => (/* binding */ addMenuCommand),
+/* harmony export */   oU: () => (/* binding */ FADE_HIDDEN_STYLE),
 /* harmony export */   xk: () => (/* binding */ waitForElement),
 /* harmony export */   yy: () => (/* binding */ sleep)
 /* harmony export */ });
-/* unused harmony exports stopAutoControl, createStopButton, expandPlayer */
+/* unused harmony exports claimTab, waitForQuiet, stopAutoControl, resumeAutoControl, setFakeFullscreen, mountPlayerControls, enableDebug, signalPreviousEpisode, signalEpisodeEnded, watchUrlChange, initUrlChangePlugin, expandPlayer */
 // TODO: Validate
 const REMOTE_LOG = "[Stream Channeler Remote]";
+/**
+ * Console logging tagged "[Stream Channeler Remote]" (plus the site, when
+ * given), so the script's messages can be filtered out of the page's own.
+ */
+function createLogger(site) {
+    const prefix = site ? `${REMOTE_LOG} [${site}]` : REMOTE_LOG;
+    return {
+        debug: (...args) => console.debug(prefix, ...args),
+        log: (...args) => console.log(prefix, ...args),
+        warn: (...args) => console.warn(prefix, ...args),
+        error: (...args) => console.error(prefix, ...args),
+    };
+}
+/**
+ * Whether this tab was opened by Stream Channeler Remote. The first call in a
+ * claimed tab consumes the marker, so a tab the user opens later isn't taken
+ * over; call it once, at the start of a playback plugin.
+ */
+function claimTab() {
+    if (!GM_getValue("loadingTab", false))
+        return false;
+    GM_setValue("loadingTab", false);
+    return true;
+}
+// TODO: Validate
+function shouldSkipIntros() {
+    return GM_getValue("skipIntros", true);
+}
+// TODO: Validate
+function shouldSkipCredits() {
+    return GM_getValue("skipCredits", true);
+}
+const menuSections = ["start", "settings", "builder"];
+const menuCommands = [];
+let menuIds = [];
+// TODO: Validate
+function renderMenu() {
+    menuIds.forEach(GM_unregisterMenuCommand);
+    menuIds = menuSections.flatMap((section) => menuCommands
+        .filter((command) => command.section === section)
+        .map(({ label, run }) => GM_registerMenuCommand(typeof label === "string" ? label : label(), run)));
+}
+// TODO: Validate
+function addMenuCommand(section, label, run) {
+    menuCommands.push({ section, label, run });
+    renderMenu();
+}
+const skipSettings = [
+    { key: "skipIntros", noun: "intros" },
+    { key: "skipCredits", noun: "credits" },
+];
+// TODO: Validate
+function registerSkipMenus() {
+    for (const { key, noun } of skipSettings) {
+        addMenuCommand("settings", () => GM_getValue(key, true)
+            ? `Skipping ${noun} (click to play ${noun})`
+            : `Playing ${noun} (click to skip ${noun})`, () => GM_setValue(key, !GM_getValue(key, true)));
+        GM_addValueChangeListener(key, renderMenu);
+    }
+}
+// TODO: Validate
+function clickWhenShown(selector, text) {
+    return () => {
+        const button = Array.from(document.querySelectorAll(selector)).find((element) => !text || text.test(element.textContent ?? ""));
+        if (!button?.checkVisibility({}))
+            return false;
+        button.click();
+        return true;
+    };
+}
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1796,7 +2075,7 @@ function waitForElement(selector, timeoutMs = 15000) {
         observer.observe(document.body, { childList: true, subtree: true });
         const timeout = setTimeout(() => {
             observer.disconnect();
-            reject(new Error(`${REMOTE_LOG} Timed out waiting for "${selector}"`));
+            reject(new Error(`Timed out waiting for "${selector}"`));
         }, timeoutMs);
     });
 }
@@ -1805,7 +2084,7 @@ function waitForElement(selector, timeoutMs = 15000) {
  * `quietMs`, or after `maxMs` as a hard stop. Used to wait for a busy SPA player
  * to finish laying itself out before we restyle it — adaptive, unlike a fixed
  * delay. Only the element's own attributes are watched (not the subtree) so
- * normal playback (progress bar, etc.) doesn't keep it from settling.
+ * normal playback (progress bar, etc.) doesn't keep it from going quiet.
  */
 function waitForQuiet(element, quietMs = 1200, maxMs = 10000) {
     return new Promise((resolve) => {
@@ -1832,89 +2111,23 @@ let autoControlStopped = false;
 // Mark automatic control as stopped so signalEpisodeEnded() stops advancing the
 // channel and the current tab stays open. Exposed so plugins can wire it up to
 // their own stop control (e.g. NHK embeds one in the player's control bar).
-function stopAutoControl() {
+function stopAutoControl(log) {
     autoControlStopped = true;
-    console.log(`${REMOTE_LOG} Automatic control stopped by user`);
+    log.log("Automatic control stopped by user");
     // Tell the controller on the channels page to stop too, so its Start/Stop
     // Remote button updates. A fresh timestamp guarantees a value change.
     GM_setValue("remoteStopRequested", Date.now());
 }
-// A small button pinned to the bottom-left that lets the user cancel automatic
-// control of the current video. Styled to match the Manage "Add to Channel"
-// widget. Hidden by default and revealed when the user moves the cursor (like a
-// video player's controls), then auto-hides after a short idle period.
-const STOP_BUTTON_HIDE_DELAY_MS = 3000;
-function createStopButton() {
-    if (document.getElementById("stream-channeler-stop-btn"))
-        return;
-    let stopped = false;
-    const button = document.createElement("button");
-    button.id = "stream-channeler-stop-btn";
-    button.textContent = "Stop Auto Control";
-    button.style.cssText =
-        "position:fixed;bottom:16px;left:16px;z-index:2147483647;padding:6px 16px;border-radius:4px;border:1px solid #3a4a5c;background:#c0392b;color:#fff;font-family:system-ui,sans-serif;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:opacity 0.2s ease;";
-    button.addEventListener("click", () => {
-        stopped = true;
-        stopAutoControl();
-        button.textContent = "Auto Control Stopped";
-        button.disabled = true;
-        button.style.opacity = "0.6";
-        button.style.cursor = "default";
-    });
-    // Reveal on cursor movement, then fade back out once the cursor is idle.
-    let hideTimer;
-    document.addEventListener("mousemove", () => {
-        if (stopped)
-            return;
-        button.style.opacity = "1";
-        button.style.pointerEvents = "auto";
-        clearTimeout(hideTimer);
-        hideTimer = window.setTimeout(() => {
-            button.style.opacity = "0";
-            button.style.pointerEvents = "none";
-        }, STOP_BUTTON_HIDE_DELAY_MS);
-    });
-    document.body.appendChild(button);
+// TODO: Validate
+function resumeAutoControl(log) {
+    autoControlStopped = false;
+    log.log("Automatic control resumed by user");
+    GM_setValue("remoteResumeRequested", Date.now());
 }
 // Icons as structured data (root svg attrs + child shapes). Built via
 // createElementNS rather than from a markup string because YouTube's strict CSP
 // (Trusted Types) blocks both innerHTML and DOMParser string sinks.
 const SVG_NS = "http://www.w3.org/2000/svg";
-const STROKE_ATTRS = {
-    viewBox: "0 0 24 24",
-    width: "16",
-    height: "16",
-    fill: "none",
-    stroke: "currentColor",
-    "stroke-width": "2",
-    "stroke-linecap": "round",
-    "stroke-linejoin": "round",
-    "aria-hidden": "true",
-};
-const STOP_ICON = {
-    attrs: {
-        viewBox: "0 0 24 24",
-        width: "16",
-        height: "16",
-        fill: "currentColor",
-        "aria-hidden": "true",
-    },
-    shapes: [
-        {
-            tag: "rect",
-            attrs: { x: "6", y: "6", width: "12", height: "12", rx: "1" },
-        },
-    ],
-};
-const RESTORE_ICON = {
-    attrs: STROKE_ATTRS,
-    shapes: [
-        { tag: "path", attrs: { d: "M8 3v3a2 2 0 0 1-2 2H3" } },
-        { tag: "path", attrs: { d: "M21 8h-3a2 2 0 0 1-2-2V3" } },
-        { tag: "path", attrs: { d: "M3 16h3a2 2 0 0 1 2 2v3" } },
-        { tag: "path", attrs: { d: "M16 21v-3a2 2 0 0 1 2-2h3" } },
-    ],
-};
 // Build an icon's SVG element with DOM APIs (no string parsing — CSP-safe).
 function buildIcon(doc, spec) {
     const svg = doc.createElementNS(SVG_NS, "svg");
@@ -1953,188 +2166,356 @@ function createOverlayButton(doc, id, label, icon, onClick) {
     return button;
 }
 // Fake fullscreen by covering the viewport with fixed inline styles, applied in
-// place (the element never moves, so there's no reload and restore is exact).
-// Styles are inline via CSSOM (not an injected <style>) so a strict CSP can't
-// block them. Pass the player *wrapper* that contains the site's own controls so
-// they come along into fullscreen.
+// place (the element never moves, so there's no reload). Styles are inline via
+// CSSOM (not an injected <style>) so a strict CSP can't block them. Pass the
+// player *wrapper* that contains the site's own controls so they come along into
+// fullscreen. There's no undo: stopping auto control and refreshing the page
+// restores the original layout.
 const FAKE_FULLSCREEN_CLASS = "scr-fake-fullscreen";
-const FAKE_FULLSCREEN_STYLES = {
-    position: "fixed",
-    top: "0",
-    left: "0",
-    width: "100vw",
-    height: "100vh",
-    "z-index": "2147483646",
-    background: "#000",
-};
-// While expanded, ancestors whose inline style we overrode (to lift the player
-// to the top of the stacking order); their original inline style is restored on
-// exit. Only one player per tab, so module-level state is fine.
-let liftedAncestors = [];
-function setFakeFullscreen(target, on) {
-    if (on === target.classList.contains(FAKE_FULLSCREEN_CLASS))
+function setFakeFullscreen(target) {
+    if (target.classList.contains(FAKE_FULLSCREEN_CLASS))
         return;
-    if (on) {
-        for (const [prop, value] of Object.entries(FAKE_FULLSCREEN_STYLES)) {
-            target.style.setProperty(prop, value, "important");
-        }
-        // A fixed player can be trapped inside a transformed ancestor's stacking
-        // context, so other page elements paint over it. Lift every ancestor to the
-        // top of its parent's stacking order so the whole chain (and the player)
-        // floats above the page. z-index only changes paint order (no reflow); any
-        // shift from positioning a static ancestor is hidden behind the player and
-        // reverted on exit.
-        liftedAncestors = [];
-        for (let el = target.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
-            liftedAncestors.push({ el, cssText: el.style.cssText });
-            el.style.setProperty("z-index", "2147483646", "important");
-            if (getComputedStyle(el).position === "static") {
-                el.style.setProperty("position", "relative", "important");
-            }
-        }
-        document.documentElement.style.overflow = "hidden";
-        target.classList.add(FAKE_FULLSCREEN_CLASS);
+    for (const [prop, value] of Object.entries({
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100vw",
+        height: "100vh",
+        "z-index": "2147483646",
+        background: "#000",
+    })) {
+        target.style.setProperty(prop, value, "important");
     }
-    else {
-        for (const prop of Object.keys(FAKE_FULLSCREEN_STYLES)) {
-            target.style.removeProperty(prop);
+    // A fixed player can be trapped inside a transformed ancestor's stacking
+    // context, so other page elements paint over it. Lift every ancestor to the
+    // top of its parent's stacking order so the whole chain (and the player)
+    // floats above the page. z-index only changes paint order (no reflow); any
+    // shift from positioning a static ancestor is hidden behind the player.
+    for (let el = target.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+        el.style.setProperty("z-index", "2147483646", "important");
+        if (getComputedStyle(el).position === "static") {
+            el.style.setProperty("position", "relative", "important");
         }
-        for (const { el, cssText } of liftedAncestors)
-            el.style.cssText = cssText;
-        liftedAncestors = [];
-        document.documentElement.style.overflow = "";
-        target.classList.remove(FAKE_FULLSCREEN_CLASS);
-        // The player may have sized its <video> to fill the full-viewport area; clear
-        // that inline size so it refits the restored player instead of overflowing.
-        const video = target.querySelector("video");
-        if (video) {
-            for (const prop of ["width", "height", "left", "top", "transform"]) {
-                video.style.removeProperty(prop);
-            }
-        }
-        // Nudge a recompute (immediate + delayed, once layout settles).
-        window.dispatchEvent(new Event("resize"));
-        setTimeout(() => window.dispatchEvent(new Event("resize")), 300);
     }
+    document.documentElement.style.overflow = "hidden";
+    target.classList.add(FAKE_FULLSCREEN_CLASS);
 }
-// Add a generic controls overlay (Stop Auto Control + an expand/restore toggle)
-// to every controller-opened tab. It's always pinned to the same spot — fixed in
-// the top-right of the top page, above any fake-fullscreen player — independent
-// of the site's own player. Like a video player's own controls, it's hidden until
-// the cursor moves, then fades out again once the cursor is idle (but stays while
-// hovered). Site-specific behaviour (how fullscreen is faked) is supplied via
-// `config`.
-const CONTROLS_IDLE_HIDE_MS = 2500;
-function mountPlayerControls(config) {
-    const log = config.log ?? REMOTE_LOG;
-    if (document.getElementById("stream-channeler-controls"))
-        return;
-    const container = document.createElement("div");
-    container.id = "stream-channeler-controls";
-    container.style.cssText =
-        "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;opacity:0;pointer-events:none;transition:opacity 0.3s ease;";
-    // Visibility is driven by a window capture-phase pointermove listener (which
-    // runs before any page handler can stop it) rather than mouseenter/mouseleave,
-    // because some players (e.g. Adult Swim) swallow pointer events.
+/**
+ * Call `handler` on every pointer move over the page, including over same-origin
+ * iframes (e.g. NHK World's player), whose events never reach the top window.
+ * `frame` is the iframe element the event came from, or null for the top page.
+ * Listens in the capture phase so a page handler can't stop the event first.
+ */
+function onPointerMoveInAnyFrame(handler) {
+    const options = { capture: true, passive: true };
+    window.addEventListener("pointermove", (event) => handler(event, null), options);
+    // An iframe gets a new window each time it navigates, so re-attach on load.
+    const attached = new WeakSet();
+    const attachToFrame = (frame) => {
+        try {
+            const frameWindow = frame.contentWindow;
+            // Throws for cross-origin frames, which can't be listened to.
+            if (!frameWindow || attached.has(frameWindow) || !frameWindow.document)
+                return;
+            attached.add(frameWindow);
+            frameWindow.addEventListener("pointermove", (event) => handler(event, frame), options);
+        }
+        catch {
+            // Cross-origin frame.
+        }
+    };
+    const watchFrame = (frame) => {
+        if (frame.dataset.scrPointerWatched)
+            return;
+        frame.dataset.scrPointerWatched = "1";
+        frame.addEventListener("load", () => attachToFrame(frame));
+        attachToFrame(frame);
+    };
+    document.querySelectorAll("iframe").forEach(watchFrame);
+    new MutationObserver(() => {
+        document.querySelectorAll("iframe").forEach(watchFrame);
+    }).observe(document.body, { childList: true, subtree: true });
+}
+const FADE_HIDDEN_STYLE = "opacity:0;pointer-events:none;transition:opacity 0.3s ease;";
+// TODO: Validate
+// Visibility is driven by a window capture-phase pointermove listener (which
+// runs before any page handler can stop it) rather than mouseenter/mouseleave,
+// because some players (e.g. Adult Swim) swallow pointer events.
+function fadeWhenIdle(getElement) {
     let hideTimer;
     const setVisible = (visible) => {
-        container.style.opacity = visible ? "1" : "0";
+        const element = getElement();
+        if (!element)
+            return;
+        element.style.opacity = visible ? "1" : "0";
         // Not clickable while hidden, so a stray click can't hit an invisible button.
-        container.style.pointerEvents = visible ? "auto" : "none";
+        element.style.pointerEvents = visible ? "auto" : "none";
     };
     const hide = () => {
         clearTimeout(hideTimer);
+        if (getElement()?.contains(document.activeElement))
+            return;
         setVisible(false);
     };
-    window.addEventListener("pointermove", (event) => {
+    const initial = getElement();
+    if (initial)
+        initial.style.cssText += FADE_HIDDEN_STYLE;
+    onPointerMoveInAnyFrame((event, frame) => {
         setVisible(true);
         clearTimeout(hideTimer);
-        const rect = container.getBoundingClientRect();
-        const hovered = event.clientX >= rect.left &&
-            event.clientX <= rect.right &&
-            event.clientY >= rect.top &&
-            event.clientY <= rect.bottom;
-        // Keep showing while the cursor rests on the controls.
+        const element = getElement();
+        if (!element)
+            return;
+        // Events from a player iframe are in its coordinates; shift them into the
+        // top page's to compare against the element.
+        const offset = frame?.getBoundingClientRect() ?? { left: 0, top: 0 };
+        const x = event.clientX + offset.left;
+        const y = event.clientY + offset.top;
+        const rect = element.getBoundingClientRect();
+        const hovered = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
         if (!hovered)
-            hideTimer = window.setTimeout(hide, CONTROLS_IDLE_HIDE_MS);
-    }, { capture: true, passive: true });
+            hideTimer = window.setTimeout(hide, 2500);
+    });
     // Pointer left the page entirely (no element it moved to).
     document.addEventListener("pointerout", (event) => {
         if (!event.relatedTarget)
             hide();
     }, { capture: true, passive: true });
     window.addEventListener("blur", hide);
-    const stopButton = createOverlayButton(document, "stream-channeler-stop-btn", "Stop Auto Control", STOP_ICON, () => {
-        stopAutoControl();
-        stopButton.style.opacity = "0.5";
-        stopButton.title = "Auto Control Stopped";
-        const span = stopButton.querySelector("span");
-        if (span)
-            span.textContent = "Auto Control Stopped";
-    });
-    // Restore control: only shown while the video is expanded. Once the video is
-    // back at its original size there's no button (no separate expand control).
-    const restoreLabel = config.restoreLabel ?? "Restore Original Size";
-    let toggleButton;
-    const updateToggle = () => {
-        toggleButton.style.display = config.isExpanded() ? "" : "none";
-    };
-    toggleButton = createOverlayButton(document, "stream-channeler-restore-btn", restoreLabel, RESTORE_ICON, () => {
-        config.toggleExpand();
-        updateToggle();
-    });
-    // Keep the toggle in sync when the expand state changes elsewhere (e.g. the
-    // initial auto-expand done right after these controls mount).
-    if (config.expandObserveTarget) {
-        new MutationObserver(updateToggle).observe(config.expandObserveTarget, {
-            attributes: true,
-            attributeFilter: ["class", "style"],
-        });
-    }
-    updateToggle();
-    container.append(stopButton, toggleButton);
-    document.body.appendChild(container);
-    console.log(`${log} Player controls overlay added`);
 }
-function signalEpisodeEnded() {
-    if (autoControlStopped) {
-        console.log(`${REMOTE_LOG} Episode ended but automatic control is stopped — staying on tab`);
+// Add the Stop Auto Control overlay to every controller-opened tab. It's always
+// pinned to the same spot — fixed in the top-right of the top page, above any
+// fake-fullscreen player — independent of the site's own player. Like a video player's own controls, it's hidden until
+// the cursor moves, then fades out again once the cursor is idle (but stays while
+// hovered).
+// TODO: Validate
+function mountPlayerControls(log) {
+    if (document.getElementById("stream-channeler-controls"))
         return;
-    }
-    console.log(`${REMOTE_LOG} Episode ended, closing tab`);
-    const now = Date.now();
-    const current = GM_getValue("videoEnded", 0);
-    console.log(`${REMOTE_LOG} Current videoEnded=${current}, now=${now}`);
-    // Only signal if the current value is older (stop sets it to far future)
-    if (now > current) {
-        console.log(`${REMOTE_LOG} Signaling episode ended (setting videoEnded=${now})`);
-        GM_setValue("videoEnded", now);
+    const container = document.createElement("div");
+    container.id = "stream-channeler-controls";
+    container.style.cssText =
+        "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;";
+    fadeWhenIdle(() => container);
+    const stopIcon = {
+        attrs: {
+            viewBox: "0 0 24 24",
+            width: "16",
+            height: "16",
+            fill: "currentColor",
+            "aria-hidden": "true",
+        },
+        shapes: [
+            {
+                tag: "rect",
+                attrs: { x: "6", y: "6", width: "12", height: "12", rx: "1" },
+            },
+        ],
+    };
+    const resumeIcon = {
+        attrs: {
+            viewBox: "0 0 24 24",
+            width: "16",
+            height: "16",
+            fill: "currentColor",
+            "aria-hidden": "true",
+        },
+        shapes: [{ tag: "polygon", attrs: { points: "7 4 19 12 7 20 7 4" } }],
+    };
+    const stopButton = createOverlayButton(document, "stream-channeler-stop-btn", "Stop Auto Control", stopIcon, () => {
+        const [icon, label] = autoControlStopped
+            ? [stopIcon, "Stop Auto Control"]
+            : [resumeIcon, "Resume Auto Control"];
+        if (autoControlStopped) {
+            resumeAutoControl(log);
+        }
+        else {
+            stopAutoControl(log);
+        }
+        stopButton.title = label;
+        setButtonContent(document, stopButton, icon, label);
+    });
+    const refreshButton = createOverlayButton(document, "stream-channeler-refresh-btn", "Refresh", {
+        attrs: {
+            viewBox: "0 0 24 24",
+            width: "16",
+            height: "16",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "2",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            "aria-hidden": "true",
+        },
+        shapes: [
+            {
+                tag: "path",
+                attrs: { d: "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" },
+            },
+            { tag: "path", attrs: { d: "M21 3v5h-5" } },
+        ],
+    }, () => {
+        if (!autoControlStopped)
+            GM_setValue("loadingTab", true);
+        log.log("Refreshing the page");
+        location.reload();
+    });
+    const nextButton = createOverlayButton(document, "stream-channeler-next-btn", "Play Next Episode", {
+        attrs: {
+            viewBox: "0 0 24 24",
+            width: "16",
+            height: "16",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "2",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            "aria-hidden": "true",
+        },
+        shapes: [
+            { tag: "polygon", attrs: { points: "5 4 15 12 5 20 5 4" } },
+            { tag: "line", attrs: { x1: "19", y1: "5", x2: "19", y2: "19" } },
+        ],
+    }, () => {
+        signalEpisodeEnded(log, "Play Next Episode was clicked");
+    });
+    const previousButton = createOverlayButton(document, "stream-channeler-previous-btn", "Play Previous Episode", {
+        attrs: {
+            viewBox: "0 0 24 24",
+            width: "16",
+            height: "16",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "2",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            "aria-hidden": "true",
+        },
+        shapes: [
+            { tag: "polygon", attrs: { points: "19 20 9 12 19 4 19 20" } },
+            { tag: "line", attrs: { x1: "5", y1: "19", x2: "5", y2: "5" } },
+        ],
+    }, () => {
+        signalPreviousEpisode(log, "Play Previous Episode was clicked");
+    });
+    container.append(refreshButton, previousButton, nextButton, stopButton);
+    document.body.appendChild(container);
+    log.debug("Player controls overlay added");
+    new MutationObserver(() => {
+        if (container.isConnected)
+            return;
+        document.body.appendChild(container);
+        log.debug("Player controls overlay re-added after the page removed it");
+    }).observe(document.body, { childList: true });
+}
+// Several detectors (URL change, video end) can fire for the same episode; only
+// the first one may advance the channel.
+let episodeEndSignaled = false;
+let debugEnabled = false;
+// TODO: Validate
+function enableDebug() {
+    debugEnabled = true;
+}
+// TODO: Validate
+function confirmLeave(reason, leave) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText =
+        "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);font-family:system-ui,sans-serif;";
+    const panel = document.createElement("div");
+    panel.style.cssText =
+        "display:flex;flex-direction:column;gap:12px;max-width:min(560px,90vw);padding:16px;border-radius:8px;background:#1c252f;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-size:14px;";
+    const message = document.createElement("div");
+    message.textContent = `Stream Channeler Remote wants to leave this page: ${reason}`;
+    const buttons = document.createElement("div");
+    buttons.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
+    const button = (text, onClick) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.textContent = text;
+        el.style.cssText =
+            "padding:6px 16px;border-radius:4px;border:1px solid #3a4a5c;background:#2a3846;color:#fff;font-size:14px;cursor:pointer;";
+        el.addEventListener("click", (event) => {
+            event.stopPropagation();
+            overlay.remove();
+            onClick();
+        });
+        return el;
+    };
+    buttons.append(button("Block", () => {
+        episodeEndSignaled = false;
+    }), button("Allow", leave));
+    panel.append(message, buttons);
+    overlay.append(panel);
+    document.body.append(overlay);
+}
+// TODO: Validate
+function leaveEpisode(log, reason, leave) {
+    episodeEndSignaled = true;
+    log.log(`Leaving the episode: ${reason}`);
+    if (debugEnabled) {
+        confirmLeave(reason, leave);
     }
     else {
-        console.log(`${REMOTE_LOG} Skipping signal — current value is newer (stop was triggered?)`);
+        leave();
     }
-    console.log(`${REMOTE_LOG} Closing tab`);
-    window.close();
+}
+// TODO: Validate
+function signalPreviousEpisode(log, reason) {
+    if (episodeEndSignaled)
+        return;
+    if (autoControlStopped) {
+        log.log("Automatic control is stopped, staying on tab");
+        return;
+    }
+    leaveEpisode(log, reason, () => {
+        log.log("Going back to the previous episode, closing tab");
+        GM_setValue("previousEpisodeRequested", Date.now());
+        window.close();
+    });
+}
+// TODO: Validate
+function signalEpisodeEnded(log, reason) {
+    if (episodeEndSignaled)
+        return;
+    if (autoControlStopped) {
+        log.log("Episode ended but automatic control is stopped, staying on tab");
+        return;
+    }
+    leaveEpisode(log, reason, () => {
+        log.log("Episode ended, closing tab");
+        const now = Date.now();
+        const current = GM_getValue("videoEnded", 0);
+        log.debug("videoEnded:", current, "now:", now);
+        // Only signal if the current value is older (stop sets it to far future)
+        if (now > current) {
+            log.debug("Setting videoEnded to", now);
+            GM_setValue("videoEnded", now);
+        }
+        else {
+            log.warn("Not signaling: videoEnded is newer than now (was the remote stopped?)");
+        }
+        window.close();
+    });
 }
 /**
- * Detect episode end via URL change: after a settle period (to avoid false
- * positives from redirects on load), watch for the page URL to change and signal
- * completion. Used by sites whose player auto-advances by navigating.
+ * Detect episode end via URL change: watch for the page URL to change and signal
+ * completion, starting after `delayMs`. Used by sites whose player auto-advances
+ * by navigating.
  */
-function watchUrlChange(log) {
-    // Sites may redirect the URL immediately on load, so wait before
-    // capturing the URL to avoid a false positive.
-    const SETTLE_DELAY_MS = 5000;
-    console.log(`${log} Waiting ${SETTLE_DELAY_MS}ms for URL to settle`);
+// TODO: Validate
+function watchUrlChange(log, delayMs = 0) {
+    if (delayMs > 0) {
+        log.debug(`Waiting ${delayMs}ms before watching the URL`);
+    }
     setTimeout(() => {
         const initialUrl = location.href;
-        console.log(`${log} Settle complete, watching for URL change from: ${initialUrl}`);
+        log.debug("Watching for the URL to change from", initialUrl);
         function onEpisodeEnded() {
-            console.log(`${log} URL changed to: ${location.href}`);
-            console.log(`${log} Episode ended, cleaning up observers`);
+            log.log("URL changed to", location.href);
             observer.disconnect();
             clearInterval(poll);
-            signalEpisodeEnded();
+            window.removeEventListener("popstate", checkUrlChanged);
+            signalEpisodeEnded(log, `the URL changed from ${initialUrl} to ${location.href}`);
         }
         function checkUrlChanged() {
             if (location.href !== initialUrl) {
@@ -2143,7 +2524,6 @@ function watchUrlChange(log) {
         }
         // Watch for URL changes via History API pushState/replaceState (SPA navigation)
         const observeTarget = document.querySelector("title") ?? document.head;
-        console.log(`${log} Observing element for mutations: <${observeTarget.tagName.toLowerCase()}>`);
         const observer = new MutationObserver(checkUrlChanged);
         observer.observe(observeTarget, {
             childList: true,
@@ -2152,34 +2532,50 @@ function watchUrlChange(log) {
         });
         // Fallback polling in case MutationObserver misses the navigation
         const poll = window.setInterval(checkUrlChanged, 2000);
-        console.log(`${log} Polling every 2000ms as fallback`);
         // Also catch popstate events
         window.addEventListener("popstate", checkUrlChanged);
-        console.log(`${log} Listening for popstate events`);
-    }, SETTLE_DELAY_MS);
+    }, delayMs);
 }
 /**
  * Generic plugin for sites where episode end is detected by URL change. When
  * `playerSelectors` is given, the player is also fake-fullscreened with the
- * overlay controls; otherwise only the floating stop button is shown.
+ * overlay controls; otherwise only the floating stop button is shown. `start`
+ * runs first, for pages that need a click to begin playback (it should resolve
+ * once the site has navigated to the player, so that navigation isn't mistaken
+ * for the end of the episode). With `watchVideo`, the end of the <video> also
+ * counts, for sites that only sometimes navigate when an episode finishes; a
+ * number waits that many seconds after the video finishes before moving on.
  */
-function initUrlChangePlugin(name, playerSelectors) {
-    const LOG = `${REMOTE_LOG} [${name}]`;
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
+async function initUrlChangePlugin(name, playerSelectors, start, { watchVideo = false, debug = false, } = {}) {
+    const log = createLogger(name);
+    if (!claimTab()) {
+        log.debug("Tab not opened by the remote, skipping");
         return;
-    GM_setValue("loadingTab", false);
-    watchUrlChange(LOG);
+    }
+    if (debug)
+        enableDebug();
+    if (start) {
+        try {
+            await start(log);
+        }
+        catch (error) {
+            log.error("Could not start playback:", error);
+            mountPlayerControls(log);
+            return;
+        }
+    }
+    watchUrlChange(log);
+    if (watchVideo !== false)
+        watchVideoCompletion(log, "video", watchVideo);
     if (!playerSelectors) {
-        createStopButton();
+        mountPlayerControls(log);
         return;
     }
     waitForElement("video")
-        .then((video) => expandPlayer(LOG, video, playerSelectors))
+        .then((video) => expandPlayer(log, video, playerSelectors))
         .catch((error) => {
-        console.warn(`${LOG} No video found; showing stop button only:`, error);
-        createStopButton();
+        log.warn("No video found; showing stop button only:", error);
+        mountPlayerControls(log);
     });
 }
 // Climb from the <video> while each parent is still the same size as the video.
@@ -2214,28 +2610,48 @@ async function expandPlayer(log, video, playerSelectors = []) {
     }
     player ?? (player = findSameSizeWrapper(video));
     const target = player;
-    console.log(`${log} Fullscreen target: <${target.tagName.toLowerCase()} class="${target.className}">`);
+    log.debug("Fullscreen target:", target);
     try {
-        mountPlayerControls({
-            log,
-            isExpanded: () => target.classList.contains(FAKE_FULLSCREEN_CLASS),
-            toggleExpand: () => setFakeFullscreen(target, !target.classList.contains(FAKE_FULLSCREEN_CLASS)),
-            expandObserveTarget: target,
-        });
+        mountPlayerControls(log);
         // These players keep restyling themselves while they lay out after load, so
-        // wait for that to settle or our fullscreen styles get overwritten.
+        // wait for that to stop or our fullscreen styles get overwritten.
         await waitForQuiet(target);
-        setFakeFullscreen(target, true);
-        console.log(`${log} Fullscreen applied`);
+        setFakeFullscreen(target);
+        log.debug("Fullscreen applied");
     }
     catch (error) {
-        console.error(`${log} Controls/fullscreen setup failed:`, error);
+        log.error("Controls/fullscreen setup failed:", error);
     }
 }
-// How close to the end counts as finished. Sites that cut to a "next episode"
-// promo often never fire `ended`, but the video does reach its duration.
-const VIDEO_END_SLACK_S = 1;
 const VIDEO_POLL_MS = 1000;
+// TODO: Validate
+function findVideo(selector) {
+    const video = document.querySelector(selector);
+    if (video)
+        return video;
+    for (const frame of Array.from(document.querySelectorAll("iframe"))) {
+        try {
+            const framed = frame.contentDocument?.querySelector(selector);
+            if (framed)
+                return framed;
+        }
+        catch {
+            continue;
+        }
+    }
+    return null;
+}
+// TODO: Validate
+async function waitForVideo(selector, timeoutMs = 15000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const video = findVideo(selector);
+        if (video)
+            return video;
+        await sleep(250);
+    }
+    throw new Error(`Timed out waiting for "${selector}"`);
+}
 /**
  * Generic plugin for the many streaming sites that play a plain <video> in an
  * SPA: fake-fullscreen the player, mount the overlay controls, and signal the
@@ -2246,59 +2662,151 @@ const VIDEO_POLL_MS = 1000;
  * players routinely tear down and recreate the element (ad breaks, quality
  * switches, next-episode transitions).
  */
+// TODO: Validate
 async function initVideoPlugin(config) {
-    const LOG = `${REMOTE_LOG} [${config.name}]`;
-    // Only run the script if the tab was opened by Stream Channeler Remote.
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading)
+    const log = createLogger(config.name);
+    if (!claimTab())
         return;
-    GM_setValue("loadingTab", false);
+    if (config.debug)
+        enableDebug();
     const videoSelector = config.videoSelector ?? "video";
-    console.log(`${LOG} Tab opened by Stream Channeler Remote, initializing`);
-    let video;
-    try {
-        video = await waitForElement(videoSelector);
-    }
-    catch (error) {
-        console.warn(`${LOG} No video found; falling back to URL watching:`, error);
-        createStopButton();
-        watchUrlChange(LOG);
-        return;
-    }
-    await expandPlayer(LOG, video, config.playerSelectors);
-    if (config.autoplay ?? true) {
-        const current = document.querySelector(videoSelector);
-        if (current?.paused) {
-            current.play().catch((error) => {
-                console.warn(`${LOG} Autoplay was rejected:`, error);
-            });
+    log.log("Tab opened by Stream Channeler Remote, initializing");
+    if (config.start) {
+        try {
+            await config.start(log);
+        }
+        catch (error) {
+            log.error("Could not start playback:", error);
+            mountPlayerControls(log);
+            return;
         }
     }
-    watchVideoCompletion(LOG, videoSelector);
-    if (config.watchUrl)
-        watchUrlChange(LOG);
-    console.log(`${LOG} Watching for end`);
+    const { endSelector, isEnded } = config;
+    for (const selector of [endSelector ?? []].flat()) {
+        watchEndCheck(log, `element shown (${selector})`, () => document.querySelector(selector) !== null);
+    }
+    if (isEnded)
+        watchEndCheck(log, "check passed", isEnded);
+    for (const clickButton of config.clickButtons ?? []) {
+        keepTrying(log, `Clicked ${clickButton.name}`, clickButton);
+    }
+    let video;
+    try {
+        video = await waitForVideo(videoSelector);
+    }
+    catch (error) {
+        log.warn("No video found; falling back to URL watching:", error);
+        mountPlayerControls(log);
+        watchUrlChange(log, config.urlChangeDelayMs);
+        return;
+    }
+    if (config.playerToFullscreen) {
+        await expandPlayer(log, video, config.playerToFullscreen);
+    }
+    else {
+        mountPlayerControls(log);
+    }
+    if (config.manualAutoplay ?? true)
+        startPlayback(log, videoSelector);
+    if (config.watchForVideoForCompletion !== undefined &&
+        config.watchForVideoForCompletion !== false) {
+        watchVideoCompletion(log, videoSelector, config.watchForVideoForCompletion);
+    }
+    if (config.watcForhUrlChange) {
+        watchUrlChange(log, config.urlChangeDelayMs);
+    }
+    log.debug("Watching for the end of the episode");
 }
-// Signal completion once the current <video> ends or reaches its duration. The
-// element is looked up fresh each tick so a recreated player is picked up.
-function watchVideoCompletion(log, videoSelector) {
+function keepTrying(log, message, attempt) {
+    const poll = window.setInterval(() => {
+        if (!attempt())
+            return;
+        clearInterval(poll);
+        log.log(message);
+    }, VIDEO_POLL_MS);
+}
+// Call play() on the video once it has loaded enough to play, retrying until
+// playback starts. A single attempt right after the <video> appears fails when
+// the stream is still loading (play() is interrupted by the load), and the
+// element is looked up fresh each tick in case the player replaces it.
+// TODO: Validate
+function startPlayback(log, videoSelector) {
+    const poll = window.setInterval(() => {
+        const video = findVideo(videoSelector);
+        if (!video)
+            return;
+        if (!video.paused) {
+            clearInterval(poll);
+            log.debug("Playback started");
+            return;
+        }
+        if (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA)
+            return;
+        video.play().catch((error) => {
+            // The browser's autoplay policy won't change by retrying.
+            if (error instanceof DOMException && error.name === "NotAllowedError") {
+                clearInterval(poll);
+                log.warn("Autoplay was blocked by the browser:", error);
+                window.alert(`Stream Channeler Remote couldn't start the video because your browser blocked autoplay on ${location.hostname}.\n\n` +
+                    "Allow audio and video autoplay for this site, then reload the page:\n" +
+                    "• Firefox: click the permissions icon in the address bar and set Autoplay to Allow Audio and Video.\n" +
+                    "• Chrome: open Site settings for this site and set Sound to Allow.");
+                return;
+            }
+            log.debug("play() failed, retrying:", error);
+        });
+    }, VIDEO_POLL_MS);
+}
+// TODO: Validate
+// Signal completion once `isEnded` returns true.
+function watchEndCheck(log, reason, isEnded) {
+    const poll = window.setInterval(() => {
+        if (!isEnded())
+            return;
+        clearInterval(poll);
+        log.log(`End-of-episode ${reason}`);
+        signalEpisodeEnded(log, reason);
+    }, VIDEO_POLL_MS);
+}
+// Signal completion once the current <video> ends or reaches its duration, or
+// is torn down during the credits (some players swap to an end screen instead
+// of finishing). The element is looked up fresh each tick so a recreated player
+// is picked up.
+// TODO: Validate
+function watchVideoCompletion(log, videoSelector, setting) {
     let done = false;
     let seenPlaying = false;
+    let lastTime = 0;
+    let lastDuration = 0;
+    // Tracked here rather than marked on the element, so the site's player never
+    // sees its <video> change.
+    const watchedVideos = new WeakSet();
     function finish(reason) {
         if (done)
             return;
         done = true;
         clearInterval(poll);
-        console.log(`${log} Video finished (${reason})`);
-        signalEpisodeEnded();
+        log.log(`Video finished (${reason})`);
+        const delaySeconds = setting === true ? 0 : setting;
+        if (delaySeconds > 0) {
+            log.log(`Waiting ${delaySeconds}s before moving on`);
+            window.setTimeout(() => signalEpisodeEnded(log, `the video finished (${reason})`), delaySeconds * 1000);
+        }
+        else {
+            signalEpisodeEnded(log, `the video finished (${reason})`);
+        }
     }
     const poll = window.setInterval(() => {
-        const video = document.querySelector(videoSelector);
-        if (!video)
+        const video = findVideo(videoSelector);
+        if (!video) {
+            if (seenPlaying && lastDuration > 0 && lastDuration - lastTime <= 120) {
+                finish(`video removed at ${lastTime.toFixed(1)}s of ${lastDuration.toFixed(1)}s`);
+            }
             return;
+        }
         // Attach `ended` once per element; recreated players get their own listener.
-        if (!video.dataset.scrEndWatched) {
-            video.dataset.scrEndWatched = "1";
+        if (!watchedVideos.has(video)) {
+            watchedVideos.add(video);
             video.addEventListener("ended", () => finish("ended event"));
         }
         // Only trust the near-end check after playback has actually started, so a
@@ -2309,9 +2817,15 @@ function watchVideoCompletion(log, videoSelector) {
         if (!seenPlaying)
             return;
         const { currentTime, duration } = video;
+        if (Number.isFinite(duration) && duration > 0) {
+            lastTime = currentTime;
+            lastDuration = duration;
+        }
         if (Number.isFinite(duration) &&
             duration > 0 &&
-            currentTime >= duration - VIDEO_END_SLACK_S) {
+            // How close to the end counts as finished. Sites that cut to a "next episode"
+            // promo often never fire `ended`, but the video does reach its duration.
+            currentTime >= duration - 1) {
             finish(`reached ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`);
         }
     }, VIDEO_POLL_MS);
@@ -2325,6 +2839,7 @@ function watchVideoCompletion(log, videoSelector) {
 
 var map = {
 	"./Adult Swim/index.ts": "./src/manage/Adult Swim/index.ts",
+	"./Amazon/index.ts": "./src/manage/Amazon/index.ts",
 	"./Crunchyroll/index.ts": "./src/manage/Crunchyroll/index.ts",
 	"./Disney+/index.ts": "./src/manage/Disney+/index.ts",
 	"./HBO Max/index.ts": "./src/manage/HBO Max/index.ts",
@@ -2335,9 +2850,8 @@ var map = {
 	"./Paramount+/index.ts": "./src/manage/Paramount+/index.ts",
 	"./Peacock/index.ts": "./src/manage/Peacock/index.ts",
 	"./Pluto TV/index.ts": "./src/manage/Pluto TV/index.ts",
-	"./Prime Video/index.ts": "./src/manage/Prime Video/index.ts",
+	"./Roku/index.ts": "./src/manage/Roku/index.ts",
 	"./TMDB/index.ts": "./src/manage/TMDB/index.ts",
-	"./The Roku Channel/index.ts": "./src/manage/The Roku Channel/index.ts",
 	"./Tubi/index.ts": "./src/manage/Tubi/index.ts",
 	"./YouTube/index.ts": "./src/manage/YouTube/index.ts"
 };
@@ -2369,6 +2883,7 @@ webpackContext.id = "./src/manage sync recursive \\/index\\.ts$";
 
 var map = {
 	"./Adult Swim/index.ts": "./src/playback/Adult Swim/index.ts",
+	"./Amazon/index.ts": "./src/playback/Amazon/index.ts",
 	"./Crunchyroll/index.ts": "./src/playback/Crunchyroll/index.ts",
 	"./Disney+/index.ts": "./src/playback/Disney+/index.ts",
 	"./HBO Max/index.ts": "./src/playback/HBO Max/index.ts",
@@ -2379,8 +2894,7 @@ var map = {
 	"./Paramount+/index.ts": "./src/playback/Paramount+/index.ts",
 	"./Peacock/index.ts": "./src/playback/Peacock/index.ts",
 	"./Pluto TV/index.ts": "./src/playback/Pluto TV/index.ts",
-	"./Prime Video/index.ts": "./src/playback/Prime Video/index.ts",
-	"./The Roku Channel/index.ts": "./src/playback/The Roku Channel/index.ts",
+	"./Roku/index.ts": "./src/playback/Roku/index.ts",
 	"./Tubi/index.ts": "./src/playback/Tubi/index.ts",
 	"./YouTube/index.ts": "./src/playback/YouTube/index.ts"
 };
@@ -2414,6 +2928,20 @@ module.exports = {
   hostnames: ["adultswim.com"],
   // Episodes live at /videos/<show>/<episode>.
   matches: ["https://www.adultswim.com/videos/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/manage/Amazon/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["primevideo.com", "amazon.com"],
+  matches: [
+    "https://www.primevideo.com/*",
+    "https://www.amazon.com/gp/video/detail/*",
+  ],
 };
 
 
@@ -2551,15 +3079,12 @@ module.exports = {
 
 /***/ },
 
-/***/ "./src/manage/Prime Video/matches.cjs"
+/***/ "./src/manage/Roku/matches.cjs"
 (module) {
 
 module.exports = {
-  hostnames: ["primevideo.com", "amazon.com"],
-  matches: [
-    "https://www.primevideo.com/*",
-    "https://www.amazon.com/gp/video/detail/*",
-  ],
+  hostnames: ["therokuchannel.roku.com"],
+  matches: ["https://therokuchannel.roku.com/details/*"],
 };
 
 
@@ -2574,17 +3099,6 @@ module.exports = {
     "https://www.themoviedb.org/tv/*",
     "https://www.themoviedb.org/movie/*",
   ],
-};
-
-
-/***/ },
-
-/***/ "./src/manage/The Roku Channel/matches.cjs"
-(module) {
-
-module.exports = {
-  hostnames: ["therokuchannel.roku.com"],
-  matches: ["https://therokuchannel.roku.com/details/*"],
 };
 
 
@@ -2622,8 +3136,18 @@ module.exports = {
 
 module.exports = {
   hostnames: ["adultswim.com"],
-  // Episodes live at /videos/<show>/<episode>.
   matches: ["https://www.adultswim.com/videos/*"],
+};
+
+
+/***/ },
+
+/***/ "./src/playback/Amazon/matches.cjs"
+(module) {
+
+module.exports = {
+  hostnames: ["primevideo.com", "amazon.com"],
+  matches: ["https://www.amazon.com/gp/video/*"],
 };
 
 
@@ -2645,10 +3169,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["disneyplus.com"],
-  matches: [
-    "https://www.disneyplus.com/play/*",
-    "https://www.disneyplus.com/*/video/*",
-  ],
+  matches: ["https://www.disneyplus.com/*/play/*"],
 };
 
 
@@ -2659,7 +3180,10 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hbomax.com"],
-  matches: ["https://play.hbomax.com/video/watch/*"],
+  matches: [
+    "https://play.hbomax.com/video/watch/*",
+    "https://play.hbomax.com/movie/*",
+  ],
 };
 
 
@@ -2706,7 +3230,9 @@ module.exports = {
 
 module.exports = {
   hostnames: ["netflix.com"],
-  matches: ["https://www.netflix.com/watch/*"],
+  // Not just /watch/*: Netflix can bounce a new tab to its "Who's watching?"
+  // profile picker on another page first.
+  matches: ["https://www.netflix.com/*"],
 };
 
 
@@ -2749,21 +3275,7 @@ module.exports = {
 
 /***/ },
 
-/***/ "./src/playback/Prime Video/matches.cjs"
-(module) {
-
-module.exports = {
-  hostnames: ["primevideo.com", "amazon.com"],
-  matches: [
-    "https://www.primevideo.com/*",
-    "https://www.amazon.com/gp/video/*",
-  ],
-};
-
-
-/***/ },
-
-/***/ "./src/playback/The Roku Channel/matches.cjs"
+/***/ "./src/playback/Roku/matches.cjs"
 (module) {
 
 module.exports = {
@@ -2873,25 +3385,167 @@ var __webpack_exports__ = {};
 (() => {
 "use strict";
 
+// EXTERNAL MODULE: ./src/shared.ts
+var shared = __webpack_require__("./src/shared.ts");
+;// ./src/custom_channel.ts
+// TODO: Validate
+
+const log = (0,shared/* createLogger */.h)("Custom Channel");
+const URLS_KEY = "customChannelUrls";
+let running = false;
+let stoppedByTab = false;
+let currentIndex = 0;
+// TODO: Validate
+let isCardRemoteRunning = () => false;
+// TODO: Validate
+function storedUrls() {
+    return GM_getValue(URLS_KEY, []);
+}
+// TODO: Validate
+function promptForUrls() {
+    if (document.getElementById("custom-channel-dialog"))
+        return;
+    const overlay = document.createElement("div");
+    overlay.id = "custom-channel-dialog";
+    overlay.style.cssText =
+        "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);font-family:system-ui,sans-serif;";
+    const panel = document.createElement("div");
+    panel.style.cssText =
+        "display:flex;flex-direction:column;gap:10px;width:min(700px,90vw);padding:16px;border-radius:8px;background:#1c252f;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.5);";
+    const label = document.createElement("label");
+    label.textContent = "URLs to play as a channel, in order (one per line):";
+    label.style.cssText = "font-size:14px;";
+    const textarea = document.createElement("textarea");
+    textarea.value = storedUrls().join("\n");
+    textarea.rows = 15;
+    textarea.spellcheck = false;
+    textarea.style.cssText =
+        "width:100%;box-sizing:border-box;padding:8px;border-radius:4px;border:1px solid #3a4a5c;background:#0f151b;color:#fff;font-family:monospace;font-size:13px;resize:vertical;";
+    const buttons = document.createElement("div");
+    buttons.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
+    const button = (text, onClick) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.textContent = text;
+        el.style.cssText =
+            "padding:6px 16px;border-radius:4px;border:1px solid #3a4a5c;background:#2a3846;color:#fff;font-size:14px;cursor:pointer;";
+        el.addEventListener("click", onClick);
+        return el;
+    };
+    const close = () => overlay.remove();
+    const save = () => {
+        const urls = textarea.value
+            .split("\n")
+            .map((url) => url.trim())
+            .filter((url) => url.length > 0);
+        GM_setValue(URLS_KEY, urls);
+        log.log(`Saved ${urls.length} URLs`);
+        close();
+    };
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay)
+            close();
+    });
+    overlay.addEventListener("keydown", (event) => {
+        if (event.key === "Escape")
+            close();
+    });
+    buttons.append(button("Cancel", close), button("Save", save));
+    panel.append(label, textarea, buttons);
+    overlay.append(panel);
+    document.body.append(overlay);
+    textarea.focus();
+}
+// TODO: Validate
+function openCurrentUrl() {
+    const urls = storedUrls();
+    if (currentIndex >= urls.length) {
+        log.log(`Finished all ${urls.length} URLs`);
+        running = false;
+        return;
+    }
+    const url = urls[currentIndex];
+    log.log(`Opening ${currentIndex + 1}/${urls.length}:`, url);
+    GM_setValue("loadingTab", true);
+    GM_setValue("loadingUrl", url);
+    window.open(url, "_blank");
+}
+// TODO: Validate
+function toggleCustomChannel() {
+    stoppedByTab = false;
+    if (running) {
+        running = false;
+        log.log("Stopped");
+        return;
+    }
+    if (isCardRemoteRunning()) {
+        window.alert("Stop the channel's remote before starting a custom channel.");
+        return;
+    }
+    if (storedUrls().length === 0) {
+        window.alert("Set the custom channel URLs first.");
+        return;
+    }
+    running = true;
+    currentIndex = 0;
+    openCurrentUrl();
+}
+// TODO: Validate
+function initCustomChannel(cardRemoteRunning) {
+    isCardRemoteRunning = cardRemoteRunning;
+    (0,shared/* addMenuCommand */.iq)("start", "Start/stop custom channel", toggleCustomChannel);
+    (0,shared/* addMenuCommand */.iq)("builder", "Set custom channel URLs", promptForUrls);
+    GM_addValueChangeListener("videoEnded", () => {
+        if (!running)
+            return;
+        if (isCardRemoteRunning()) {
+            running = false;
+            return;
+        }
+        currentIndex++;
+        openCurrentUrl();
+    });
+    GM_addValueChangeListener("previousEpisodeRequested", () => {
+        if (!running)
+            return;
+        if (isCardRemoteRunning()) {
+            running = false;
+            return;
+        }
+        currentIndex = Math.max(0, currentIndex - 1);
+        openCurrentUrl();
+    });
+    GM_addValueChangeListener("remoteStopRequested", () => {
+        if (!running)
+            return;
+        stoppedByTab = true;
+        running = false;
+    });
+    GM_addValueChangeListener("remoteResumeRequested", () => {
+        if (!stoppedByTab || running)
+            return;
+        stoppedByTab = false;
+        running = true;
+    });
+}
+
 ;// ./src/playback.ts
 // TODO: Validate
-const CHANNEL_PATH_RE = /^\/channels\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i;
-// https://lucide.dev/icons/monitor-play
-const PLAY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-play-icon lucide-monitor-play"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"/><path d="M12 17v4"/><path d="M8 21h8"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg>`;
-// https://lucide.dev/icons/monitor-x
-const STOP_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-x-icon lucide-monitor-x"><path d="m14.5 12.5-5-5"/><path d="m9.5 12.5 5-5"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>`;
+
+const playback_log = (0,shared/* createLogger */.h)();
 let cards = [];
-let currentIndex = 0;
-let running = false;
+let playback_currentIndex = 0;
+let playback_running = false;
 let listenerRegistered = false;
+let playback_stoppedByTab = false;
 function promptSetCurrentIndex() {
-    const input = window.prompt(`Set current episode (1-${cards.length}):`, String(currentIndex + 1));
+    const input = window.prompt(`Set current episode (1-${cards.length}):`, String(playback_currentIndex + 1));
     if (input === null)
         return;
     const parsed = parseInt(input, 10);
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > cards.length)
         return;
-    currentIndex = parsed - 1;
+    playback_currentIndex = parsed - 1;
     updateButton();
 }
 function handleButtonClick(event) {
@@ -2905,7 +3559,7 @@ function handleButtonClick(event) {
 }
 function updateButton() {
     let button = document.getElementById("remote-control-btn");
-    if (!CHANNEL_PATH_RE.test(location.pathname)) {
+    if (!/^\/channels\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(location.pathname)) {
         button?.remove();
         return;
     }
@@ -2923,15 +3577,21 @@ function updateButton() {
         button.addEventListener("click", handleButtonClick);
         commentsButton.after(button);
     }
-    const icon = running ? STOP_ICON_SVG : PLAY_ICON_SVG;
-    const action = running ? "Stop Remote" : "Start Remote";
-    const displayed = running ? currentIndex + 1 : currentIndex;
+    // Icons: https://lucide.dev/icons/monitor-x and
+    // https://lucide.dev/icons/monitor-play
+    const icon = playback_running
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-x-icon lucide-monitor-x"><path d="m14.5 12.5-5-5"/><path d="m9.5 12.5 5-5"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-play-icon lucide-monitor-play"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"/><path d="M12 17v4"/><path d="M8 21h8"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg>`;
+    const action = playback_running ? "Stop Remote" : "Start Remote";
+    // Shown 1-based: the episode that's playing, or that Start Remote will play
+    // next. Capped at the last episode once the channel has finished.
+    const displayed = Math.min(playback_currentIndex + 1, cards.length);
     const counter = `<span id="remote-control-counter" style="cursor:pointer;text-decoration:underline">${displayed}/${cards.length}</span>`;
     button.innerHTML = `${icon}${action} (${counter})`;
 }
 function clickCurrentCard() {
     // If all videos have been played stop remote.
-    if (currentIndex >= cards.length) {
+    if (playback_currentIndex >= cards.length) {
         stopRemote();
         return;
     }
@@ -2941,50 +3601,120 @@ function clickCurrentCard() {
     // trigger a race condition if they open a tab to a video at the same time as the
     // script opens a video.
     GM_setValue("loadingTab", true);
-    cards[currentIndex].click();
+    // Remember where the tab is headed, for plugins that get bounced elsewhere
+    // first (e.g. Netflix's profile picker) and need to find their way back.
+    const card = cards[playback_currentIndex];
+    const link = card.querySelector("a[href]") ??
+        card.closest("a[href]");
+    GM_setValue("loadingUrl", link?.href ?? null);
+    if (!link)
+        captureOpenedUrl();
+    card.click();
     updateButton();
+}
+// Cards without a plain link open their video from script, so record the URL
+// they open (via window.open or a clicked link) as loadingUrl.
+function captureOpenedUrl() {
+    const page = unsafeWindow;
+    const originalOpen = page.open;
+    let captured = false;
+    const record = (url) => {
+        if (captured)
+            return;
+        captured = true;
+        playback_log.log("Card opened", url);
+        GM_setValue("loadingUrl", url);
+    };
+    const patchedOpen = (url, ...rest) => {
+        if (url)
+            record(new URL(String(url), location.href).href);
+        return originalOpen.call(page, url, ...rest);
+    };
+    // Firefox keeps the page's globals behind Xray wrappers, so the patch has to
+    // be exported into the page to be callable from it.
+    page.open =
+        typeof exportFunction === "function"
+            ? exportFunction(patchedOpen, page)
+            : patchedOpen;
+    const onClick = (event) => {
+        const anchor = event.target?.closest?.("a[href]");
+        if (anchor instanceof HTMLAnchorElement)
+            record(anchor.href);
+    };
+    document.addEventListener("click", onClick, true);
+    // The card may open the tab after an await, so keep listening for a moment.
+    window.setTimeout(() => {
+        page.open = originalOpen;
+        document.removeEventListener("click", onClick, true);
+        if (!captured) {
+            playback_log.warn("Couldn't tell which URL the card opened");
+        }
+    }, 3000);
 }
 function stopRemote() {
-    running = false;
+    playback_running = false;
     updateButton();
 }
+// TODO: Validate
 function startRemote() {
     if (cards.length === 0) {
         cards = Array.from(document.querySelectorAll('[data-slot="card"]'));
-        currentIndex = 0;
+        playback_currentIndex = 0;
     }
-    console.log(`[Stream Channeler Remote] Starting at ${currentIndex}/${cards.length}`);
-    running = true;
+    playback_log.log(`Starting at ${playback_currentIndex + 1}/${cards.length}`);
+    playback_running = true;
     // Listener to detect for when a video is completed.
     if (!listenerRegistered) {
         listenerRegistered = true;
         GM_addValueChangeListener("videoEnded", (_name, _oldValue, newValue) => {
             // Only automatically load the next channel if Stream Channeler Remote is in
             // an active state.
-            if (!running)
+            if (!playback_running)
                 return;
             if (typeof newValue !== "number")
-                throw new Error(`[Stream Channeler Remote] videoEnded value is not a number: ${newValue}`);
-            currentIndex++;
+                throw new Error(`videoEnded value is not a number: ${newValue}`);
+            playback_currentIndex++;
+            clickCurrentCard();
+        });
+        GM_addValueChangeListener("previousEpisodeRequested", () => {
+            if (!playback_running)
+                return;
+            playback_currentIndex = Math.max(0, playback_currentIndex - 1);
             clickCurrentCard();
         });
     }
     clickCurrentCard();
 }
+// TODO: Validate
 function toggleRemote() {
-    if (running) {
+    playback_stoppedByTab = false;
+    if (playback_running) {
         stopRemote();
     }
     else {
         startRemote();
     }
 }
+// TODO: Validate
+function isRemoteRunning() {
+    return playback_running;
+}
+// TODO: Validate
 function initPlayback() {
     // A video tab's "Stop Auto Control" button sets this; stop the remote so the
     // Start/Stop Remote button reflects it.
     GM_addValueChangeListener("remoteStopRequested", () => {
-        if (running)
-            stopRemote();
+        if (!playback_running)
+            return;
+        playback_stoppedByTab = true;
+        stopRemote();
+    });
+    GM_addValueChangeListener("remoteResumeRequested", () => {
+        if (!playback_stoppedByTab || playback_running)
+            return;
+        playback_stoppedByTab = false;
+        playback_running = true;
+        updateButton();
     });
     function syncState() {
         const newCards = Array.from(document.querySelectorAll('[data-slot="card"]'));
@@ -2992,17 +3722,17 @@ function initPlayback() {
         // clicking the "Next Episode" button) so these changes need to be managed.
         if (newCards.length !== cards.length ||
             !newCards.every((c, i) => c === cards[i])) {
-            const activeCard = cards[currentIndex];
+            const activeCard = cards[playback_currentIndex];
             cards = newCards;
             if (activeCard) {
                 const newIndex = cards.indexOf(activeCard);
-                currentIndex = newIndex >= 0 ? newIndex : 0;
+                playback_currentIndex = newIndex >= 0 ? newIndex : 0;
                 // No activeCard can probably occur when the user verifies a watch on the last
                 // episode of a
                 // channel probably.
             }
             else {
-                currentIndex = 0;
+                playback_currentIndex = 0;
             }
         }
         updateButton();
@@ -3024,15 +3754,17 @@ function initPlayback() {
 // EXTERNAL MODULE: ./src/manage.ts
 var manage = __webpack_require__("./src/manage.ts");
 ;// ./src/index.ts
+// TODO: Validate
+
+
 
 
 function loadPlugins(ctx) {
     return ctx.keys().map((key) => ctx(key));
 }
-const playbackPlugins = loadPlugins(__webpack_require__("./src/playback sync recursive \\/index\\.ts$"));
-const managePlugins = loadPlugins(__webpack_require__("./src/manage sync recursive \\/index\\.ts$"));
-const playbackPlugin = playbackPlugins.find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
-const managePlugin = managePlugins.find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
+const playbackPlugin = loadPlugins(__webpack_require__("./src/playback sync recursive \\/index\\.ts$")).find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
+const managePlugin = loadPlugins(__webpack_require__("./src/manage sync recursive \\/index\\.ts$")).find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
+(0,shared/* registerSkipMenus */.V_)();
 if (playbackPlugin)
     playbackPlugin.init();
 if (managePlugin)
@@ -3040,6 +3772,7 @@ if (managePlugin)
 if (!playbackPlugin && !managePlugin) {
     if (location.hostname.includes("streamchanneler.com")) {
         initPlayback();
+        initCustomChannel(isRemoteRunning);
         (0,manage/* initManage */.Ad)();
     }
 }
