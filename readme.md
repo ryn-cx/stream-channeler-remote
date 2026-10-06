@@ -13,10 +13,6 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 2. Click **Start Remote**
 3. Episodes will open, play, and advance automatically
 
-### Netflix profile
-
-If Netflix asks "Who's watching?", the script can pick your profile automatically. On any Netflix page, open your userscript manager's menu, choose **Set Netflix profile**, and enter the profile name and, if the profile is locked, its 4-digit PIN.
-
 ## Supported Sites
 
 | Site        | Skip Credits | Play Credits | Skip Introduction | Profile Management | Note                                                                                                                                                                                                    |
@@ -36,3 +32,11 @@ If Netflix asks "Who's watching?", the script can pick your profile automaticall
 | Roku        | ✅           | ✅           | ✅                | ❌                 |                                                                                                                                                                                                         |
 | Tubi        | ✅           | ✅           | ✅                | ❌                 |                                                                                                                                                                                                         |
 | YouTube     | ✔            | ✔            | ✔                 | ❌                 | YouTube will always play introductions and credits.                                                                                                                                                     |
+
+### Intros and credits
+
+Intros and credits are skipped by default. To change this, open your userscript manager's menu on any page and click **Skipping intros** or **Skipping credits** to switch it to **Playing intros** or **Playing credits**. Click it again to switch back. The setting applies to every supported site.
+
+### Netflix profile
+
+If Netflix asks "Who's watching?", the script can pick your profile automatically. On any Netflix page, open your userscript manager's menu, choose **Set Netflix profile**, and enter the profile name and, if the profile is locked, its 4-digit PIN.
