@@ -30,7 +30,6 @@ module.exports = {
   match: [
     "https://streamchanneler.com/channels",
     "https://streamchanneler.com/channels/*",
-    "http://localhost:5173/*", // TODO: Remove this for the first production release.
     ...pluginMatches,
   ],
   source: repository.url,
