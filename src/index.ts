@@ -1,5 +1,8 @@
-import { initPlayback } from "./playback";
+// TODO: Validate
+import { initCustomChannel } from "./custom_channel";
+import { initPlayback, isRemoteRunning } from "./playback";
 import { initManage } from "./manage";
+import { registerSkipMenus } from "./shared";
 
 interface Plugin {
   hostnames: string[];
@@ -11,19 +14,14 @@ function loadPlugins(ctx: __WebpackModuleApi.RequireContext): Plugin[] {
   return ctx.keys().map((key) => ctx(key) as Plugin);
 }
 
-const playbackPlugins = loadPlugins(
+const playbackPlugin = loadPlugins(
   require.context("./playback", true, /\/index\.ts$/),
-);
-const managePlugins = loadPlugins(
+).find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
+const managePlugin = loadPlugins(
   require.context("./manage", true, /\/index\.ts$/),
-);
+).find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
 
-const playbackPlugin = playbackPlugins.find((p) =>
-  p.hostnames.some((h) => location.hostname.includes(h)),
-);
-const managePlugin = managePlugins.find((p) =>
-  p.hostnames.some((h) => location.hostname.includes(h)),
-);
+registerSkipMenus();
 
 if (playbackPlugin) playbackPlugin.init();
 if (managePlugin) managePlugin.init();
@@ -31,6 +29,7 @@ if (managePlugin) managePlugin.init();
 if (!playbackPlugin && !managePlugin) {
   if (location.hostname.includes("streamchanneler.com")) {
     initPlayback();
+    initCustomChannel(isRemoteRunning);
     initManage();
   }
 }

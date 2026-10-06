@@ -1,11 +1,7 @@
 // TODO: Validate
-const LOG = "[Stream Channeler Remote]";
+import { createLogger } from "./shared";
 
-// https://lucide.dev/icons/radio-tower
-const LOAD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-radio-tower"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><path d="M16.2 4.7a6.14 6.14 0 0 1 .8 7.5"/><path d="M19.1 1.9a10.14 10.14 0 0 1 0 14.2"/><path d="M9.56 14l-2.35 8.68"/><path d="M14.44 14l2.35 8.68"/><circle cx="12" cy="12" r="2"/></svg>`;
-
-// https://lucide.dev/icons/antenna
-const INSERT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-antenna-icon lucide-antenna"><path d="M2 12 7 2"/><path d="m7 12 5-10"/><path d="m12 12 5-10"/><path d="m17 12 5-10"/><path d="M4.5 7h15"/><path d="M12 16v6"/></svg>`;
+const log = createLogger();
 
 export interface ManagedChannels {
   [channelId: string]: { name: string; urls: string[]; showUrls: string[] };
@@ -35,7 +31,7 @@ async function fetchChannelShowUrls(channelId: string): Promise<string[]> {
   const token = localStorage.getItem("access_token");
   if (!token)
     throw new Error(
-      `${LOG} No access_token in localStorage — log in to streamchanneler.com first`,
+      `No access_token in localStorage — log in to streamchanneler.com first`,
     );
   const response = await fetch(
     `https://api.streamchanneler.com/api/v1/channels/${channelId}/shows`,
@@ -43,7 +39,7 @@ async function fetchChannelShowUrls(channelId: string): Promise<string[]> {
   );
   if (!response.ok)
     throw new Error(
-      `${LOG} Failed to fetch shows for channel ${channelId}: ${response.status}`,
+      `Failed to fetch shows for channel ${channelId}: ${response.status}`,
     );
   const data = (await response.json()) as ChannelShowsResponse;
   return data.shows.map((s) => s.url);
@@ -90,7 +86,7 @@ async function loadBlankChannels(): Promise<void> {
     // No channel links found on the page — usually means the site's DOM changed
     // or this isn't the channels page. Surface it instead of silently saving {}.
     throw new Error(
-      `${LOG} No channels found on the page. The channels list DOM may have changed, or you may not be logged in.`,
+      `No channels found on the page. The channels list DOM may have changed, or you may not be logged in.`,
     );
   }
 
@@ -108,8 +104,8 @@ async function loadBlankChannels(): Promise<void> {
       channels[id].showUrls = result.value;
       totalShows += result.value.length;
     } else {
-      console.error(
-        `${LOG} Failed to load shows for "${channels[id].name}":`,
+      log.error(
+        `Failed to load shows for "${channels[id].name}":`,
         result.reason,
       );
       failed.push(channels[id].name);
@@ -128,8 +124,7 @@ async function loadBlankChannels(): Promise<void> {
 
 function pasteQueue(dialog: Element): void {
   const textarea = dialog.querySelector<HTMLTextAreaElement>("textarea");
-  if (!textarea)
-    throw new Error(`${LOG} Textarea not found in bulk import modal`);
+  if (!textarea) throw new Error("Textarea not found in bulk import modal");
 
   const channels = getChannelQueues();
   const output: Record<string, string[]> = {};
@@ -141,9 +136,7 @@ function pasteQueue(dialog: Element): void {
 
   textarea.value = JSON.stringify(output, null, 2);
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
-  console.log(
-    `${LOG} Inserted URLs for ${Object.keys(output).length} channels`,
-  );
+  log.log(`Inserted URLs for ${Object.keys(output).length} channels`);
 }
 
 function addButtonsToModal(dialog: Element): void {
@@ -152,18 +145,19 @@ function addButtonsToModal(dialog: Element): void {
   if (modalFooter.querySelector("#manage-load-btn")) return;
 
   const existingBtn = modalFooter.querySelector("button");
-  if (!existingBtn) throw new Error(`${LOG} No button found in dialog footer`);
+  if (!existingBtn) throw new Error("No button found in dialog footer");
   const btnClass = existingBtn.className;
 
   const loadBtn = document.createElement("button");
   loadBtn.id = "manage-load-btn";
   loadBtn.className = btnClass;
   loadBtn.setAttribute("data-slot", "button");
-  loadBtn.innerHTML = `${INSERT_ICON_SVG}Load Channels`;
+  // https://lucide.dev/icons/antenna
+  loadBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-antenna-icon lucide-antenna"><path d="M2 12 7 2"/><path d="m7 12 5-10"/><path d="m12 12 5-10"/><path d="m17 12 5-10"/><path d="M4.5 7h15"/><path d="M12 16v6"/></svg>Load Channels`;
   loadBtn.addEventListener("click", (e) => {
     e.preventDefault();
     loadBlankChannels().catch((err: unknown) => {
-      console.error(`${LOG} Load Channels failed:`, err);
+      log.error("Load Channels failed:", err);
       alert(err instanceof Error ? err.message : String(err));
     });
   });
@@ -172,7 +166,8 @@ function addButtonsToModal(dialog: Element): void {
   insertBtn.id = "manage-insert-btn";
   insertBtn.className = btnClass;
   insertBtn.setAttribute("data-slot", "button");
-  insertBtn.innerHTML = `${LOAD_ICON_SVG}Insert URLs`;
+  // https://lucide.dev/icons/radio-tower
+  insertBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-radio-tower"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><path d="M16.2 4.7a6.14 6.14 0 0 1 .8 7.5"/><path d="M19.1 1.9a10.14 10.14 0 0 1 0 14.2"/><path d="M9.56 14l-2.35 8.68"/><path d="M14.44 14l2.35 8.68"/><circle cx="12" cy="12" r="2"/></svg>Insert URLs`;
   insertBtn.addEventListener("click", (e) => {
     e.preventDefault();
     pasteQueue(dialog);
@@ -185,7 +180,7 @@ function addButtonsToModal(dialog: Element): void {
 export function initManage(): void {
   if (location.pathname !== "/channels") return;
 
-  console.log(`${LOG} Watching for bulk import modal`);
+  log.debug("Watching for the bulk import modal");
 
   // The bulk import dialog is rendered inside a WinBox window, so locate it by its
   // title and use the enclosing window as the dialog root.

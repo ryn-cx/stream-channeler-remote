@@ -1,17 +1,13 @@
 // TODO: Validate
-const CHANNEL_PATH_RE =
-  /^\/channels\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i;
+import { createLogger } from "./shared";
 
-// https://lucide.dev/icons/monitor-play
-const PLAY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-play-icon lucide-monitor-play"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"/><path d="M12 17v4"/><path d="M8 21h8"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg>`;
-
-// https://lucide.dev/icons/monitor-x
-const STOP_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-x-icon lucide-monitor-x"><path d="m14.5 12.5-5-5"/><path d="m9.5 12.5 5-5"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>`;
+const log = createLogger();
 
 let cards: HTMLElement[] = [];
 let currentIndex = 0;
 let running = false;
 let listenerRegistered = false;
+let stoppedByTab = false;
 
 function promptSetCurrentIndex(): void {
   const input = window.prompt(
@@ -38,7 +34,11 @@ function handleButtonClick(event: MouseEvent): void {
 function updateButton(): void {
   let button = document.getElementById("remote-control-btn");
 
-  if (!CHANNEL_PATH_RE.test(location.pathname)) {
+  if (
+    !/^\/channels\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(
+      location.pathname,
+    )
+  ) {
     button?.remove();
     return;
   }
@@ -63,9 +63,15 @@ function updateButton(): void {
     commentsButton.after(button);
   }
 
-  const icon = running ? STOP_ICON_SVG : PLAY_ICON_SVG;
+  // Icons: https://lucide.dev/icons/monitor-x and
+  // https://lucide.dev/icons/monitor-play
+  const icon = running
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-x-icon lucide-monitor-x"><path d="m14.5 12.5-5-5"/><path d="m9.5 12.5 5-5"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-play-icon lucide-monitor-play"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"/><path d="M12 17v4"/><path d="M8 21h8"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg>`;
   const action = running ? "Stop Remote" : "Start Remote";
-  const displayed = running ? currentIndex + 1 : currentIndex;
+  // Shown 1-based: the episode that's playing, or that Start Remote will play
+  // next. Capped at the last episode once the channel has finished.
+  const displayed = Math.min(currentIndex + 1, cards.length);
   const counter = `<span id="remote-control-counter" style="cursor:pointer;text-decoration:underline">${displayed}/${cards.length}</span>`;
   button.innerHTML = `${icon}${action} (${counter})`;
 }
@@ -83,8 +89,59 @@ function clickCurrentCard(): void {
   // trigger a race condition if they open a tab to a video at the same time as the
   // script opens a video.
   GM_setValue("loadingTab", true);
-  cards[currentIndex].click();
+  // Remember where the tab is headed, for plugins that get bounced elsewhere
+  // first (e.g. Netflix's profile picker) and need to find their way back.
+  const card = cards[currentIndex];
+  const link =
+    card.querySelector<HTMLAnchorElement>("a[href]") ??
+    card.closest<HTMLAnchorElement>("a[href]");
+  GM_setValue("loadingUrl", link?.href ?? null);
+  if (!link) captureOpenedUrl();
+  card.click();
   updateButton();
+}
+
+// Cards without a plain link open their video from script, so record the URL
+// they open (via window.open or a clicked link) as loadingUrl.
+function captureOpenedUrl(): void {
+  const page = unsafeWindow;
+  const originalOpen = page.open;
+  let captured = false;
+  const record = (url: string): void => {
+    if (captured) return;
+    captured = true;
+    log.log("Card opened", url);
+    GM_setValue("loadingUrl", url);
+  };
+
+  const patchedOpen = (
+    url?: string | URL,
+    ...rest: [string?, string?]
+  ): Window | null => {
+    if (url) record(new URL(String(url), location.href).href);
+    return originalOpen.call(page, url, ...rest);
+  };
+  // Firefox keeps the page's globals behind Xray wrappers, so the patch has to
+  // be exported into the page to be callable from it.
+  page.open =
+    typeof exportFunction === "function"
+      ? exportFunction(patchedOpen, page)
+      : patchedOpen;
+
+  const onClick = (event: MouseEvent): void => {
+    const anchor = (event.target as Element | null)?.closest?.("a[href]");
+    if (anchor instanceof HTMLAnchorElement) record(anchor.href);
+  };
+  document.addEventListener("click", onClick, true);
+
+  // The card may open the tab after an await, so keep listening for a moment.
+  window.setTimeout(() => {
+    page.open = originalOpen;
+    document.removeEventListener("click", onClick, true);
+    if (!captured) {
+      log.warn("Couldn't tell which URL the card opened");
+    }
+  }, 3000);
 }
 
 function stopRemote(): void {
@@ -92,6 +149,7 @@ function stopRemote(): void {
   updateButton();
 }
 
+// TODO: Validate
 function startRemote(): void {
   if (cards.length === 0) {
     cards = Array.from(
@@ -99,9 +157,7 @@ function startRemote(): void {
     );
     currentIndex = 0;
   }
-  console.log(
-    `[Stream Channeler Remote] Starting at ${currentIndex}/${cards.length}`,
-  );
+  log.log(`Starting at ${currentIndex + 1}/${cards.length}`);
   running = true;
 
   // Listener to detect for when a video is completed.
@@ -114,19 +170,24 @@ function startRemote(): void {
         // an active state.
         if (!running) return;
         if (typeof newValue !== "number")
-          throw new Error(
-            `[Stream Channeler Remote] videoEnded value is not a number: ${newValue}`,
-          );
+          throw new Error(`videoEnded value is not a number: ${newValue}`);
         currentIndex++;
         clickCurrentCard();
       },
     );
+    GM_addValueChangeListener("previousEpisodeRequested", () => {
+      if (!running) return;
+      currentIndex = Math.max(0, currentIndex - 1);
+      clickCurrentCard();
+    });
   }
 
   clickCurrentCard();
 }
 
+// TODO: Validate
 function toggleRemote(): void {
+  stoppedByTab = false;
   if (running) {
     stopRemote();
   } else {
@@ -134,11 +195,25 @@ function toggleRemote(): void {
   }
 }
 
+// TODO: Validate
+export function isRemoteRunning(): boolean {
+  return running;
+}
+
+// TODO: Validate
 export function initPlayback(): void {
   // A video tab's "Stop Auto Control" button sets this; stop the remote so the
   // Start/Stop Remote button reflects it.
   GM_addValueChangeListener("remoteStopRequested", () => {
-    if (running) stopRemote();
+    if (!running) return;
+    stoppedByTab = true;
+    stopRemote();
+  });
+  GM_addValueChangeListener("remoteResumeRequested", () => {
+    if (!stoppedByTab || running) return;
+    stoppedByTab = false;
+    running = true;
+    updateButton();
   });
 
   function syncState(): void {

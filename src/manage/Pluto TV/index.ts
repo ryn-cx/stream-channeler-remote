@@ -3,6 +3,7 @@ import { initManagePlugin } from "../../manage_plugin";
 
 export { hostnames, matches } from "./matches.cjs";
 
+const ITEM_ID = "[0-9a-f]{24}";
 // Every page sits under a locale segment, e.g.
 //   https://pluto.tv/en/on-demand/series/5ef05c6acdce3c001a779a79/details
 //   https://pluto.tv/us/on-demand/series/5ef05c6acdce3c001a779a79/season/1
@@ -10,10 +11,8 @@ export { hostnames, matches } from "./matches.cjs";
 //   https://pluto.tv/us/movies/68a54f49df1220b53566f16e/
 //   https://pluto.tv/us/shows/washed/
 // Season and episode pages are read as their series.
-const LOCALE = "(?:/[a-z]{2}(?:-[a-z]{2})?)?";
-const ITEM_ID = "[0-9a-f]{24}";
 const TITLE_PATH_RE = new RegExp(
-  `^${LOCALE}(?:` +
+  `^(?:/[a-z]{2}(?:-[a-z]{2})?)?(?:` +
     `/on-demand/series/${ITEM_ID}(?:/season/\\d+(?:/episode/${ITEM_ID})?)?(?:/details)?` +
     `|(?:/on-demand)?/movies/${ITEM_ID}(?:/details)?` +
     `|/shows/[a-z0-9-]+` +

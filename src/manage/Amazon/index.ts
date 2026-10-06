@@ -22,13 +22,20 @@ function currentTitleUrl(): string | null {
     : `https://www.primevideo.com/detail/${id}`;
 }
 
+function isPlaybackActive(): boolean {
+  // Amazon plays over the title page without changing the URL. The web
+  // player covers the window while it's open.
+  return document.querySelector("#dv-web-player.dv-player-fullscreen") !== null;
+}
+
 export function init(): void {
   initManagePlugin({
-    website_name: "Prime Video",
+    website_name: "Amazon",
     buttonColor: "#00a8e1",
     isValidPage: () => currentTitleUrl() !== null,
     waitSelector: "body",
     getCurrentUrl: () => currentTitleUrl() ?? location.href,
     getMatchKey: (url) => url.match(TITLE_ID_RE)?.[1] ?? null,
+    isPlaybackActive,
   });
 }

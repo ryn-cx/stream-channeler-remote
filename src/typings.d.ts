@@ -1,3 +1,4 @@
+// TODO: Validate
 declare module "*.less";
 
 declare module "*.matches.cjs" {
@@ -18,3 +19,20 @@ declare function GM_addValueChangeListener(
     remote: boolean,
   ) => void,
 ): number;
+// Firefox: expose a sandbox function to the page (needed to patch page globals).
+declare function exportFunction<T extends (...args: never[]) => unknown>(
+  fn: T,
+  target: object,
+): T;
+declare function GM_registerMenuCommand(
+  name: string,
+  callback: () => void,
+): number;
+declare function GM_unregisterMenuCommand(id: number): void;
+
+interface Element {
+  checkVisibility(options?: {
+    opacityProperty?: boolean;
+    visibilityProperty?: boolean;
+  }): boolean;
+}

@@ -9,23 +9,29 @@ import {
 export { hostnames, matches } from "./matches.cjs";
 
 // TODO: Validate
-const skipIntro = clickWhenShown(
-  'button[data-testid="player-skip-button"]',
-  /skip intro/i,
-);
+const skipIntro = clickWhenShown("button.MuiButton-root", /skip introduction/i);
+
+// TODO: Validate
+const isWatchNextShown = (): boolean =>
+  Array.from(document.querySelectorAll("button.MuiButton-root")).some(
+    (button) => /watch next/i.test(button.textContent ?? ""),
+  );
 
 // TODO: Validate
 const player = {
-  name: "Hulu",
+  name: "Roku",
   watchForVideoForCompletion: true,
-  debug: true,
 };
 
 // TODO: Validate
 export function init(): void {
   const introButtons = shouldSkipIntros() ? [skipIntro] : [];
   if (shouldSkipCredits()) {
-    initVideoPlugin({ ...player, clickButtons: introButtons });
+    initVideoPlugin({
+      ...player,
+      isEnded: isWatchNextShown,
+      clickButtons: introButtons,
+    });
   } else {
     initVideoPlugin({ ...player, clickButtons: introButtons });
   }

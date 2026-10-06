@@ -3,11 +3,6 @@ import { initManagePlugin } from "../../manage_plugin";
 
 export { hostnames, matches } from "./matches.cjs";
 
-// Crunchyroll series URLs look like /series/GT00375170/the-food-diary-of-miss-maid.
-// Match by series ID so the highlight survives slug or trailing-slash differences
-// between the page URL and the URL stored against a channel.
-const SERIES_ID_RE = /\/series\/([A-Z0-9]+)/;
-
 export function init(): void {
   initManagePlugin({
     website_name: "Crunchyroll",
@@ -15,6 +10,9 @@ export function init(): void {
     urlRegex: /\/series\/[A-Z0-9]+/,
     waitSelector: "h1",
     getCurrentUrl: () => location.href,
-    getMatchKey: (url) => url.match(SERIES_ID_RE)?.[1] ?? null,
+    // Crunchyroll series URLs look like /series/GT00375170/the-food-diary-of-miss-maid.
+    // Match by series ID so the highlight survives slug or trailing-slash differences
+    // between the page URL and the URL stored against a channel.
+    getMatchKey: (url) => url.match(/\/series\/([A-Z0-9]+)/)?.[1] ?? null,
   });
 }

@@ -5,7 +5,12 @@ import {
   setChannelQueues,
   setLastChannelId,
 } from "./manage";
-import { waitForElement } from "./shared";
+import {
+  FADE_HIDDEN_STYLE,
+  createLogger,
+  fadeWhenIdle,
+  waitForElement,
+} from "./shared";
 
 export interface ManagePluginConfig {
   website_name: string;
@@ -26,20 +31,16 @@ export interface ManagePluginConfig {
   getMatchKey: (url: string) => string | null;
   /** When true, render a "Source (optional)" text input that prefixes the queued URL. */
   showSourceInput?: boolean;
+  /**
+   * For sites that play video on top of the title page (e.g. Amazon):
+   * returns true while a video is playing, so the footer stays out of the way.
+   */
+  isPlaybackActive?: () => boolean;
 }
 
-// Every site renders the same compact widget pinned to the bottom-right corner
-// so the UI looks consistent regardless of the host page's layout.
-const FOOTER_STYLE =
-  "position:fixed;bottom:16px;right:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:8px 10px;background:rgba(15,15,15,0.92);border:1px solid #303030;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:13px;";
-
-const SELECT_STYLE =
-  "min-width:180px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
-const INPUT_STYLE =
-  "width:130px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
-
+// TODO: Validate
 export function initManagePlugin(config: ManagePluginConfig): void {
-  const LOG = `[Stream Channeler Remote] [${config.website_name}]`;
+  const log = createLogger(config.website_name);
   const containerId = `manage-${config.website_name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-container`;
   const textColor = config.textColor ?? "#fff";
 
@@ -49,7 +50,7 @@ export function initManagePlugin(config: ManagePluginConfig): void {
   // The resolved URL the footer was last built for. Survives a manual close so
   // that dismissing the footer keeps it hidden on the *same* page but navigating
   // to a new page brings it back. Comparing the *resolved* URL (not
-  // location.href) lets derived metadata like YouTube's canonical <link> settle
+  // location.href) lets derived metadata like YouTube's canonical <link> update
   // before rebuilding, avoiding a flash of stale highlight state.
   let lastSeenUrl: string | null = null;
 
@@ -60,10 +61,10 @@ export function initManagePlugin(config: ManagePluginConfig): void {
     const initialUrl = config.getCurrentUrl();
     lastSeenUrl = initialUrl;
     const currentKey = config.getMatchKey(initialUrl);
-    console.log(`${LOG} currentUrl=${initialUrl} currentKey=${currentKey}`);
+    log.debug("Current URL:", initialUrl, "match key:", currentKey);
     if (!currentKey) {
-      console.warn(
-        `${LOG} Could not extract a match key from the current page — highlight will be skipped`,
+      log.warn(
+        "Could not extract a match key from the current page; channels won't be highlighted",
       );
     }
 
@@ -74,15 +75,16 @@ export function initManagePlugin(config: ManagePluginConfig): void {
       if (!currentKey) return false;
       const urls = showUrls ?? [];
       if (urls.length === 0) {
-        console.log(
-          `${LOG} Channel "${channelName}" has no showUrls loaded (run "Load Channels" on /channels to populate)`,
+        log.debug(
+          `Channel "${channelName}" has no shows loaded (run "Load Channels" on /channels to load them)`,
         );
         return false;
       }
       const showKeys = urls.map(config.getMatchKey);
       const match = showKeys.includes(currentKey);
-      console.log(
-        `${LOG} Channel "${channelName}": ${urls.length} shows, keys=${JSON.stringify(showKeys)}, match=${match}`,
+      log.debug(
+        `Channel "${channelName}": ${urls.length} shows, match: ${match}, keys:`,
+        showKeys,
       );
       return match;
     };
@@ -98,7 +100,11 @@ export function initManagePlugin(config: ManagePluginConfig): void {
 
     const container = document.createElement("div");
     container.id = containerId;
-    container.style.cssText = FOOTER_STYLE;
+    // Every site renders the same compact widget pinned to the bottom-right corner
+    // so the UI looks consistent regardless of the host page's layout.
+    container.style.cssText =
+      "position:fixed;bottom:16px;right:16px;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:8px 10px;background:rgba(15,15,15,0.92);border:1px solid #303030;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;font-size:13px;" +
+      FADE_HIDDEN_STYLE;
 
     const title = document.createElement("span");
     title.id = "manage-title";
@@ -107,7 +113,8 @@ export function initManagePlugin(config: ManagePluginConfig): void {
 
     const select = document.createElement("select");
     select.id = "manage-channel-select";
-    select.style.cssText = SELECT_STYLE;
+    select.style.cssText =
+      "min-width:180px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
 
     for (const [id, channel] of channelEntries) {
       const option = document.createElement("option");
@@ -134,7 +141,8 @@ export function initManagePlugin(config: ManagePluginConfig): void {
       sourceInput.id = "manage-source-input";
       sourceInput.type = "text";
       sourceInput.placeholder = "Source (optional)";
-      sourceInput.style.cssText = INPUT_STYLE;
+      sourceInput.style.cssText =
+        "width:130px;padding:6px 10px;border-radius:4px;border:1px solid #3a4a5c;background:#1c252f;color:#fff;font-size:13px;";
     }
 
     const btn = document.createElement("button");
@@ -158,7 +166,7 @@ export function initManagePlugin(config: ManagePluginConfig): void {
       if (!channel) return;
 
       if (channel.urls.includes(fullUrl)) {
-        console.log(`${LOG} URL already queued for channel "${channel.name}"`);
+        log.log(`URL already queued for channel "${channel.name}"`);
         btn.textContent = "Already Added";
         setTimeout(() => {
           btn.textContent = "Add to Channel";
@@ -168,8 +176,8 @@ export function initManagePlugin(config: ManagePluginConfig): void {
 
       channel.urls.push(fullUrl);
       setChannelQueues(allChannels);
-      console.log(
-        `${LOG} Added "${fullUrl}" to channel "${channel.name}" (${channel.urls.length} total)`,
+      log.log(
+        `Added "${fullUrl}" to channel "${channel.name}" (${channel.urls.length} total)`,
       );
 
       const option = select.querySelector<HTMLOptionElement>(
@@ -202,7 +210,7 @@ export function initManagePlugin(config: ManagePluginConfig): void {
     container.appendChild(closeBtn);
 
     document.body.appendChild(container);
-    console.log(`${LOG} UI inserted with ${channelEntries.length} channels`);
+    log.debug(`UI inserted with ${channelEntries.length} channels`);
   }
 
   function removeUI(): void {
@@ -216,7 +224,7 @@ export function initManagePlugin(config: ManagePluginConfig): void {
 
   function ensureUI(): void {
     if (closed) return;
-    if (!isValidPage()) {
+    if (!isValidPage() || config.isPlaybackActive?.()) {
       removeUI();
       return;
     }
@@ -236,17 +244,18 @@ export function initManagePlugin(config: ManagePluginConfig): void {
     ensureUI();
   }
 
-  console.log(`${LOG} Initializing on ${location.href}`);
+  log.debug("Initializing on", location.href);
 
   waitForElement<HTMLElement>(config.waitSelector)
     .then(() => {
       ensureUI();
+      fadeWhenIdle(() => document.getElementById(containerId));
       new MutationObserver(onMutation).observe(document.body, {
         childList: true,
         subtree: true,
       });
     })
     .catch(() => {
-      console.log(`${LOG} Could not find anchor element`);
+      log.warn(`Could not find "${config.waitSelector}" to insert the UI`);
     });
 }

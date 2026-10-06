@@ -9,10 +9,6 @@ export { hostnames, matches } from "./matches.cjs";
 // the "Add to Channel" button, so require a non-numeric trailing segment.
 const SHOW_PATH_RE = /^\/nhkworld\/en\/shows\/(?!\d+\/?$)[^/]+\/?$/;
 
-// Match by the show slug so the highlight survives trailing-slash differences
-// between the page URL and the URL stored against a channel.
-const SLUG_RE = /\/shows\/([^/]+)\/?$/;
-
 export function init(): void {
   initManagePlugin({
     website_name: "NHK World",
@@ -20,6 +16,8 @@ export function init(): void {
     urlRegex: SHOW_PATH_RE,
     waitSelector: ".pProgramHero__main",
     getCurrentUrl: () => location.href,
-    getMatchKey: (url) => url.match(SLUG_RE)?.[1] ?? null,
+    // Match by the show slug so the highlight survives trailing-slash differences
+    // between the page URL and the URL stored against a channel.
+    getMatchKey: (url) => url.match(/\/shows\/([^/]+)\/?$/)?.[1] ?? null,
   });
 }

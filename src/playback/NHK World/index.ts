@@ -1,167 +1,40 @@
 // TODO: Validate
 import {
-  REMOTE_LOG,
-  mountPlayerControls,
-  signalEpisodeEnded,
+  initVideoPlugin,
+  shouldSkipCredits,
   sleep,
   waitForElement,
 } from "../../shared";
 
 export { hostnames, matches } from "./matches.cjs";
 
-const LOG = `${REMOTE_LOG} [NHK World]`;
-
-function getPlayerDocument(): Document | null {
-  const iframe = document.querySelector<HTMLIFrameElement>(
-    'iframe[src*="world-player"]',
-  );
-  return iframe?.contentDocument ?? null;
-}
-
-// Like waitForElement, but searches inside the player iframe's document. The
-// iframe element and its document are re-read on every poll because the document
-// is replaced as the iframe navigates to the player.
-async function waitForPlayerElement<T extends Element>(
-  selector: string,
-  timeoutMs = 15_000,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const element = getPlayerDocument()?.querySelector<T>(selector) ?? null;
-    if (element) return element;
-    await sleep(250);
-  }
-  throw new Error(
-    `${LOG} Timed out waiting for "${selector}" in player iframe`,
-  );
-}
-
-// The play/pause control's text and title flip to "Replay" once the video
-// finishes, which is how we detect completion.
-function isReplay(button: Element): boolean {
-  if (button.getAttribute("title") === "Replay") return true;
-  const text = button.querySelector(".vjs-control-text")?.textContent?.trim();
-  return text === "Replay";
-}
-
-// Whether the video has started playing. NHK removes the "Watch Now" overlay
-// (.tVideoEpisodePlayer__watchNow, which holds the WATCH NOW button) from the
-// top page once playback begins, leaving just the playing iframe. That overlay's
-// disappearance is the most reliable signal because it lives in the top
-// document, unlike the player's <video> which is buried in the iframe.
-function isPlaying(): boolean {
-  const overlay = document.querySelector<HTMLElement>(
-    ".tVideoEpisodePlayer__watchNow",
-  );
-  if (overlay === null || overlay.offsetParent === null) return true;
-
-  // Fallback: the <video> inside the iframe reports active playback.
-  const video =
-    getPlayerDocument()?.querySelector<HTMLVideoElement>("video.vjs-tech");
-  return (
-    video != null && !video.paused && !video.ended && video.readyState >= 2
-  );
-}
-
-// NHK World does not autoplay — the video.js player is only mounted once the
-// user clicks "Watch Now". The button lives in the top-level show page (not the
-// iframe), and the click can land before the player is ready, so keep nudging
-// whichever start control is available until playback actually begins.
+// TODO: Validate
 async function startVideo(): Promise<void> {
   const watchNow = await waitForElement<HTMLElement>(
     ".tVideoEpisodePlayer__watchNowBtn",
   );
-  console.log(`${LOG} Watch Now button found, starting playback`);
   watchNow.click();
-
-  let attempt = 0;
-  while (!isPlaying()) {
-    await sleep(1000);
-    if (isPlaying()) break;
-
-    attempt++;
-    // The "Watch Now" button lives in the top page; once the player is mounted
-    // it exposes its own big play button inside the iframe. Click whichever is
-    // currently available to retry.
-    const trigger =
-      document.querySelector<HTMLElement>(
-        ".tVideoEpisodePlayer__watchNowBtn",
-      ) ??
-      getPlayerDocument()?.querySelector<HTMLElement>(".vjs-big-play-button") ??
-      null;
-    if (trigger) {
-      console.log(
-        `${LOG} Not playing yet, retrying start (attempt ${attempt})`,
-      );
-      trigger.click();
-    } else {
-      console.log(
-        `${LOG} Not playing yet, no start control available (attempt ${attempt})`,
-      );
-    }
-  }
-  console.log(`${LOG} Playback confirmed`);
-}
-
-// Real fullscreen needs a user gesture, which an automated tab doesn't have.
-// Instead, fake it: NHK's own stylesheet pins
-// ".world-player-iframe.world-player-fullscreen" to cover the whole viewport
-// (position:fixed, 100vw/100dvh, z-index:9999) and hides body overflow, so just
-// add that class to the player iframe. No Fullscreen API, no gesture needed.
-async function fullscreenVideo(): Promise<void> {
   const iframe = await waitForElement<HTMLElement>(".world-player-iframe");
   iframe.classList.add("world-player-fullscreen");
-  console.log(`${LOG} Player expanded to cover the page`);
-}
-
-// Watch the play control inside the iframe for the "Replay" state, which signals
-// completion.
-async function watchForCompletion(): Promise<void> {
-  const button = await waitForPlayerElement<HTMLElement>(".vjs-play-control");
-  console.log(`${LOG} Play control found, watching for completion`);
-
-  if (isReplay(button)) {
-    signalEpisodeEnded();
-    return;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await sleep(1000);
+    if (document.querySelector(".tVideoEpisodePlayer.is-show")) return;
+    watchNow.click();
   }
-
-  const observer = new MutationObserver(() => {
-    if (isReplay(button)) {
-      observer.disconnect();
-      signalEpisodeEnded();
-    }
-  });
-  observer.observe(button, {
-    attributes: true,
-    attributeFilter: ["title", "class"],
-    childList: true,
-    subtree: true,
-    characterData: true,
-  });
 }
 
-// Add the overlay controls, wiring NHK's fake fullscreen (a class on the player
-// iframe element, which lives in the top page) into the shared component.
-async function mountControls(): Promise<void> {
-  const iframe = await waitForElement<HTMLElement>(".world-player-iframe");
-  mountPlayerControls({
-    log: LOG,
-    isExpanded: () => iframe.classList.contains("world-player-fullscreen"),
-    toggleExpand: () => {
-      iframe.classList.toggle("world-player-fullscreen");
-    },
-    expandObserveTarget: iframe,
-  });
-}
+// TODO: Validate
+const player = {
+  name: "NHKWorld",
+  start: startVideo,
+  watchForVideoForCompletion: 1,
+};
 
-export async function init(): Promise<void> {
-  // Only run the script if the tab was opened by Stream Channeler Remote.
-  const loading = GM_getValue("loadingTab", false);
-  if (!loading) return;
-  GM_setValue("loadingTab", false);
-
-  await startVideo();
-  await fullscreenVideo();
-  await mountControls();
-  await watchForCompletion();
+// TODO: Validate
+export function init(): void {
+  if (shouldSkipCredits()) {
+    initVideoPlugin(player);
+  } else {
+    initVideoPlugin(player);
+  }
 }

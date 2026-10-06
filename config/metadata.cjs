@@ -14,10 +14,12 @@ function readMatches(dir) {
     return [];
   });
 }
-const pluginMatches = [...new Set([
-  ...readMatches(path.resolve(__dirname, "../src/playback")),
-  ...readMatches(path.resolve(__dirname, "../src/manage")),
-])];
+const pluginMatches = [
+  ...new Set([
+    ...readMatches(path.resolve(__dirname, "../src/playback")),
+    ...readMatches(path.resolve(__dirname, "../src/manage")),
+  ]),
+];
 
 module.exports = {
   name: "Stream Channeler Remote",
@@ -37,6 +39,9 @@ module.exports = {
     "GM_getValue",
     "GM_addValueChangeListener",
     "GM_deleteValue",
+    "GM_registerMenuCommand",
+    "GM_unregisterMenuCommand",
+    "unsafeWindow",
   ],
   "run-at": "document-end",
 };

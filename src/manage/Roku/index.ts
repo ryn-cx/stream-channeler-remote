@@ -11,7 +11,7 @@ const TITLE_ID_RE = /\/(?:details|watch)\/([0-9a-f]{32}(?:-\d+)?)/;
 
 export function init(): void {
   initManagePlugin({
-    website_name: "The Roku Channel",
+    website_name: "Roku",
     buttonColor: "#6c3c97",
     urlRegex: TITLE_PATH_RE,
     waitSelector: "body",

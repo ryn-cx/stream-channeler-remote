@@ -3,13 +3,11 @@ import { initManagePlugin } from "../../manage_plugin";
 
 export { hostnames, matches } from "./matches.cjs";
 
-// YouTube channels are reachable via several URL forms (/@handle, /channel/UC…,
-// /c/…, /user/…) but the Stream Channeler API stores them as /channel/UC…, so
-// match by the channel's UC… id pulled from page metadata.
-const CHANNEL_ID_RE = /\/channel\/(UC[\w-]+)/;
-
 function extractChannelId(url: string): string | null {
-  return url.match(CHANNEL_ID_RE)?.[1] ?? null;
+  // YouTube channels are reachable via several URL forms (/@handle, /channel/UC…,
+  // /c/…, /user/…) but the Stream Channeler API stores them as /channel/UC…, so
+  // match by the channel's UC… id pulled from page metadata.
+  return url.match(/\/channel\/(UC[\w-]+)/)?.[1] ?? null;
 }
 
 function getCurrentChannelId(): string | null {

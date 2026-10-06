@@ -10,36 +10,20 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) or a similar userscript manager.
 2. Install [Stream Channeler Remote](https://ryn-cx.github.io/stream-channeler-remote/index.prod.user.js).
 
-## Supported Sites
-
-**Autoplay** and **Fullscreen** are Playback features (auto-play through episodes); **Add to Channel** is the Manage feature (queue shows for bulk import).
-
-| Site             | Autoplay | Fullscreen | Add to Channel |
-| ---------------- | -------- | ---------- | -------------- |
-| YouTube          | ✅       | ✅         | ✅             |
-| NHK World        | ✅       | ✅         | ✅             |
-| Crunchyroll      | ✅       | ✅         | ✅             |
-| HBO Max          | ✅       | ✅         | ✅             |
-| Netflix          | ✅       | ✅         | ✅             |
-| Hulu             | ✅       | ✅         | ✅             |
-| Prime Video      | ✅       | ✅         | ✅             |
-| Disney+          | ✅       | ✅         | ✅             |
-| Paramount+       | ✅       | ✅         | ✅             |
-| Peacock          | ✅       | ✅         | ✅             |
-| Adult Swim       | ✅       | ✅         | ✅             |
-| HiDive           | ✅       | ✅         | ✅             |
-| Tubi             | ✅       | ✅         | ✅             |
-| Pluto TV         | ✅       | ✅         | ✅             |
-| The Roku Channel | ✅       | ✅         | ✅             |
-| TMDB             | N/A      | N/A        | ✅             |
-
 ## Usage
 
 ### Playback
 
+> [!IMPORTANT]
+> Allow audio and video autoplay for each streaming site in your browser. Episodes are opened in new tabs without a click on the page, so browsers that block autoplay (Firefox and Safari by default, or Chrome for sites you haven't interacted with) will leave them paused or muted. In Firefox, click the permissions icon in the address bar on the site and set **Autoplay** to **Allow Audio and Video**; in Chrome, open **Site settings** for the site and set **Sound** to **Allow**.
+
 1. Open a channel on [streamchanneler.com](https://streamchanneler.com)
 2. Click **Start Remote**
 3. Episodes will open, play, and advance automatically
+
+#### Netflix profile
+
+If Netflix asks "Who's watching?", the script can pick your profile automatically. On any Netflix page, open your userscript manager's menu, choose **Set Netflix profile**, and enter the profile name and, if the profile is locked, its 4-digit PIN.
 
 ### Manage
 
@@ -48,109 +32,26 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 3. Browse to a show or movie on any site with **Add to Channel** in the table above and use the **Add to Channel** button to queue it
 4. Return to the Bulk Import modal and click **Insert URLs** to populate the import field
 
-## Development
+## Supported Sites
 
-```bash
-npm install
-npm run build
-```
+**Autoplay** and **Fullscreen** are Playback features (auto-play through episodes); **Add to Channel** is the Manage feature (queue shows for bulk import).
 
-## Adding Plugins
+| Site        | Continue after middle of Series (Skip Credits) | Continue after end of Series (Skip Credits) | Continue after Movie (Skip Credits) | Continue after middle of Series (Play Credits) | Continue after end of Series (Play Credits) | Continue after movie (Play Credits) | Skip Introduction | Profile Management | Note                                                                                                                       |
+| ----------- | ---------------------------------------------- | ------------------------------------------- | ----------------------------------- | ---------------------------------------------- | ------------------------------------------- | ----------------------------------- | ----------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Adult Swim  | ✔                                              | ✔                                           | ✔                                   | ✅                                              | ✅                                           | ✅                                   | ❌                 | ❌                  | Adult Swim will always play introductions and credits.                                                                     |
+| Amazon      | ✅                                              | ✅                                           | ✅                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ❌                  |                                                                                                                            |
+| Crunchyroll | ✅                                              | ✅                                           | ✅                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ❌                  |                                                                                                                            |
+| Disney+     | ✅                                              | ✅                                           | ✅                                   | ✅                                              | ✅                                           | ✔                                   | ✅                 | ❌                  | Movies can play the main credits but secondary credits are skipped.                                                        |
+| HBO Max     | ✅                                              | ✔                                           | ✔                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ❌                  | HBO Max will always play credits for the last episode of a series or movies.                                               |
+| HiDive      | ✔                                              | ✔                                           | ✔                                   | ✅                                              | ✅                                           | ✅                                   | ❌                 | ❌                  | HiDive will always play introductions and credits.                                                                         |
+| Hulu        | ✔                                              | ✔                                           | ✔                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ❌                  | HiDive will always play credits.                                                                                           |
+| Netflix     | ✅                                              | ✔                                           | ✔                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ✅                  | Most websites will keep a profile loaded for multiple days, Netflix seems to keep a profile loaded only for a few minutes. |
+| NHK World   | ✔                                              | ✔                                           | ✔                                   | ✅                                              | ✅                                           | ✅                                   | ❌                 | ❌                  | NHK World will always play introductions and credits.                                                                      |
+| Paramount+  | ✔                                              | ✔                                           | ✔                                   | ✅                                              | ✅                                           | ✅                                   | ❌                 | ❌                  | Paramount+ will always play introductions and most of the credits.                                                         |
+| Peacock     | ✅                                              | ✅                                           | ✅                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ❌                  |                                                                                                                            |
+| Pluto TV    | ✅                                              | ✅                                           | ✅                                   | ✅                                              | ✔                                           | ✔                                   | ✅                 | ❌                  | Pluto TV will always skip the credits for the last episode of a series or movies.                                          |
+| Roku        | ✅                                              | ✅                                           | ✅                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ❌                  |                                                                                                                            |
+| Tubi        | ✅                                              | ✅                                           | ✅                                   | ✅                                              | ✅                                           | ✅                                   | ✅                 | ❌                  |                                                                                                                            |
+| YouTube     | ✔                                              | ✔                                           | ✔                                   | ✔                                              | ✔                                           | ✔                                   | ✔                 | ❌                  |                                                                                                                            |
 
-Plugins are auto-discovered from `src/playback/` and `src/manage/`. Each plugin lives in its own folder, named after the site exactly as it is written (capitalization and spaces included, e.g. `HBO Max`, `Disney+`), containing an `index.ts` and a `matches.cjs`.
-
-### Playback Plugin (auto-play episodes)
-
-A playback plugin detects when an episode ends on a streaming site and signals back to Stream Channeler.
-
-**`src/playback/Example/matches.cjs`**
-
-```js
-module.exports = {
-    hostnames: ["example.com"],
-    matches: ["https://www.example.com/watch/*"],
-};
-```
-
-**`src/playback/Example/index.ts`**
-
-```ts
-import { initUrlChangePlugin } from "../../shared";
-
-export { hostnames, matches } from "./matches.cjs";
-
-export function init(): void {
-    const loading = GM_getValue("loadingTab", false);
-    if (!loading) return;
-    GM_setValue("loadingTab", false);
-
-    // For sites where episode end is detected by URL change, use the shared helper:
-    initUrlChangePlugin("Example");
-
-    // For custom detection, use signalEpisodeEnded() from "../../shared" when the episode ends.
-}
-```
-
-For the common case — a streaming site that plays a plain `<video>` in an SPA —
-use `initVideoPlugin` instead. It gates on `loadingTab`, waits for the video,
-fake-fullscreens the player wrapper, mounts the overlay controls, and signals
-completion when the video ends or reaches its duration:
-
-```ts
-import { initVideoPlugin } from "../../shared";
-
-export { hostnames, matches } from "./matches.cjs";
-
-export function init(): void {
-    initVideoPlugin({
-        name: "Example",
-        // Tried in order via video.closest(); pick wrappers that also hold the
-        // site's own controls, so they come along into fullscreen.
-        playerSelectors: ["#video-player", ".player-container"],
-        // Optional: also signal completion when the site auto-advances by navigating.
-        watchUrl: false,
-    });
-}
-```
-
-### Manage Plugin (queue shows)
-
-A manage plugin adds an "Add to Channel" button on a content discovery site.
-
-**`src/manage/Example/matches.cjs`**
-
-```js
-module.exports = {
-    hostnames: ["example.com"],
-    matches: ["https://www.example.com/*/show/*"],
-};
-```
-
-**`src/manage/Example/index.ts`**
-
-```ts
-import { initManagePlugin } from "../../manage_plugin";
-
-export { hostnames, matches } from "./matches.cjs";
-
-export function init(): void {
-    // Render the "Add to Channel" footer that lets the user pick a channel
-    // and queue the current page's URL.
-    initManagePlugin({
-        website_name: "Example",
-        buttonColor: "#000000",
-        waitSelector: "h1",
-        getCurrentUrl: () => location.href,
-        getMatchKey: (url) => url,
-    });
-}
-```
-
-### Notes
-
-- The `matches.cjs` file defines which URLs the script runs on. It is shared between the TypeScript plugin (runtime) and the build config (metadata generation).
-- No changes to `index.ts` or `metadata.cjs` are needed — new plugins are picked up automatically.
-- Playback plugins should check `GM_getValue("loadingTab", false)` and exit early if false, to avoid running on tabs not opened by Stream Channeler.
-- Use `signalEpisodeEnded()` from `shared.ts` to notify Stream Channeler that an episode has finished.
-
-For more details, check out the existing plugins: [YouTube (playback)](<src/playback/YouTube/index.ts>) and [TMDB (manage)](<src/manage/TMDB/index.ts>).
+\* If autoplay is turned on in Amazon's playback settings, the credits are skipped; if it's turned off, the credits play. Amazon skips the credits automatically when autoplay is on.
