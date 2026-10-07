@@ -27,33 +27,22 @@
 // @match         https://tubitv.com/tv-shows/*
 // @match         https://tubitv.com/series/*
 // @match         https://www.youtube.com/watch*
+// @match         https://www.adultswim.com/*
 // @match         https://www.primevideo.com/*
-// @match         https://www.amazon.com/gp/video/detail/*
-// @match         https://www.crunchyroll.com/series/*
-// @match         https://www.disneyplus.com/browse/*
-// @match         https://www.disneyplus.com/*/browse/*
+// @match         https://www.crunchyroll.com/*
+// @match         https://www.disneyplus.com/*
 // @match         https://play.hbomax.com/*
-// @match         https://www.hbomax.com/shows/*
-// @match         https://www.hbomax.com/movies/*
-// @match         https://www.hidive.com/series/*
-// @match         https://www.hidive.com/season/*
-// @match         https://www.hulu.com/series/*
-// @match         https://www.hulu.com/movie/*
-// @match         https://www.netflix.com/title/*
-// @match         https://www.netflix.com/browse*
-// @match         https://www.paramountplus.com/shows/*
-// @match         https://www.peacocktv.com/watch/asset/*
-// @match         https://pluto.tv/*/on-demand/series/*
-// @match         https://pluto.tv/*/on-demand/movies/*
-// @match         https://pluto.tv/*/shows/*
-// @match         https://pluto.tv/*/movies/*
-// @match         https://therokuchannel.roku.com/details/*
-// @match         https://www.themoviedb.org/tv/*
-// @match         https://www.themoviedb.org/movie/*
-// @match         https://www.youtube.com/@*
-// @match         https://www.youtube.com/channel/*
-// @match         https://www.youtube.com/c/*
-// @match         https://www.youtube.com/user/*
+// @match         https://www.hbomax.com/*
+// @match         https://www.hidive.com/*
+// @match         https://www.hulu.com/*
+// @match         https://www3.nhk.or.jp/nhkworld/*
+// @match         https://www.paramountplus.com/*
+// @match         https://www.peacocktv.com/*
+// @match         https://pluto.tv/*
+// @match         https://therokuchannel.roku.com/*
+// @match         https://www.themoviedb.org/*
+// @match         https://tubitv.com/*
+// @match         https://www.youtube.com/*
 // @source        https://github.com/ryn-cx/stream-channeler-remote
 // @grant         GM_setValue
 // @grant         GM_getValue
@@ -1055,6 +1044,7 @@ function initManagePlugin(config) {
             return config.isValidPage();
         return !config.urlRegex || config.urlRegex.test(location.pathname);
     }
+    // TODO: Validate
     function ensureUI() {
         if (closed)
             return;
@@ -1063,6 +1053,8 @@ function initManagePlugin(config) {
             return;
         }
         if (document.getElementById(containerId))
+            return;
+        if (!document.querySelector(config.waitSelector))
             return;
         createUI();
     }
@@ -1078,17 +1070,11 @@ function initManagePlugin(config) {
         ensureUI();
     }
     log.debug("Initializing on", location.href);
-    (0,_shared__WEBPACK_IMPORTED_MODULE_1__/* .waitForElement */ .xk)(config.waitSelector)
-        .then(() => {
-        ensureUI();
-        (0,_shared__WEBPACK_IMPORTED_MODULE_1__/* .fadeWhenIdle */ .Bc)(() => document.getElementById(containerId));
-        new MutationObserver(onMutation).observe(document.body, {
-            childList: true,
-            subtree: true,
-        });
-    })
-        .catch(() => {
-        log.warn(`Could not find "${config.waitSelector}" to insert the UI`);
+    ensureUI();
+    (0,_shared__WEBPACK_IMPORTED_MODULE_1__/* .fadeWhenIdle */ .Bc)(() => document.getElementById(containerId));
+    new MutationObserver(onMutation).observe(document.body, {
+        childList: true,
+        subtree: true,
     });
 }
 
@@ -2925,8 +2911,7 @@ webpackContext.id = "./src/playback sync recursive \\/index\\.ts$";
 
 module.exports = {
   hostnames: ["adultswim.com"],
-  // Episodes live at /videos/<show>/<episode>.
-  matches: ["https://www.adultswim.com/videos/*"],
+  matches: ["https://www.adultswim.com/*"],
 };
 
 
@@ -2939,7 +2924,7 @@ module.exports = {
   hostnames: ["primevideo.com", "amazon.com"],
   matches: [
     "https://www.primevideo.com/*",
-    "https://www.amazon.com/gp/video/detail/*",
+    "https://www.amazon.com/gp/video/*",
   ],
 };
 
@@ -2951,7 +2936,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["crunchyroll.com"],
-  matches: ["https://www.crunchyroll.com/series/*"],
+  matches: ["https://www.crunchyroll.com/*"],
 };
 
 
@@ -2962,10 +2947,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["disneyplus.com"],
-  matches: [
-    "https://www.disneyplus.com/browse/*",
-    "https://www.disneyplus.com/*/browse/*",
-  ],
+  matches: ["https://www.disneyplus.com/*"],
 };
 
 
@@ -2976,11 +2958,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hbomax.com"],
-  matches: [
-    "https://play.hbomax.com/*",
-    "https://www.hbomax.com/shows/*",
-    "https://www.hbomax.com/movies/*",
-  ],
+  matches: ["https://play.hbomax.com/*", "https://www.hbomax.com/*"],
 };
 
 
@@ -2991,11 +2969,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hidive.com"],
-  matches: [
-    "https://www.hidive.com/series/*",
-    "https://www.hidive.com/season/*",
-    "https://www.hidive.com/video/*",
-  ],
+  matches: ["https://www.hidive.com/*"],
 };
 
 
@@ -3006,7 +2980,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hulu.com"],
-  matches: ["https://www.hulu.com/series/*", "https://www.hulu.com/movie/*"],
+  matches: ["https://www.hulu.com/*"],
 };
 
 
@@ -3017,7 +2991,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["nhk.or.jp"],
-  matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
+  matches: ["https://www3.nhk.or.jp/nhkworld/*"],
 };
 
 
@@ -3028,10 +3002,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["netflix.com"],
-  matches: [
-    "https://www.netflix.com/title/*",
-    "https://www.netflix.com/browse*",
-  ],
+  matches: ["https://www.netflix.com/*"],
 };
 
 
@@ -3042,10 +3013,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["paramountplus.com"],
-  matches: [
-    "https://www.paramountplus.com/shows/*",
-    "https://www.paramountplus.com/movies/video/*",
-  ],
+  matches: ["https://www.paramountplus.com/*"],
 };
 
 
@@ -3056,7 +3024,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["peacocktv.com"],
-  matches: ["https://www.peacocktv.com/watch/asset/*"],
+  matches: ["https://www.peacocktv.com/*"],
 };
 
 
@@ -3067,12 +3035,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["pluto.tv"],
-  matches: [
-    "https://pluto.tv/*/on-demand/series/*",
-    "https://pluto.tv/*/on-demand/movies/*",
-    "https://pluto.tv/*/shows/*",
-    "https://pluto.tv/*/movies/*",
-  ],
+  matches: ["https://pluto.tv/*"],
 };
 
 
@@ -3083,7 +3046,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["therokuchannel.roku.com"],
-  matches: ["https://therokuchannel.roku.com/details/*"],
+  matches: ["https://therokuchannel.roku.com/*"],
 };
 
 
@@ -3094,10 +3057,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["themoviedb.org"],
-  matches: [
-    "https://www.themoviedb.org/tv/*",
-    "https://www.themoviedb.org/movie/*",
-  ],
+  matches: ["https://www.themoviedb.org/*"],
 };
 
 
@@ -3108,7 +3068,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["tubitv.com"],
-  matches: ["https://tubitv.com/series/*", "https://tubitv.com/movies/*"],
+  matches: ["https://tubitv.com/*"],
 };
 
 
@@ -3119,12 +3079,7 @@ module.exports = {
 
 module.exports = {
   hostnames: ["youtube.com"],
-  matches: [
-    "https://www.youtube.com/@*",
-    "https://www.youtube.com/channel/*",
-    "https://www.youtube.com/c/*",
-    "https://www.youtube.com/user/*",
-  ],
+  matches: ["https://www.youtube.com/*"],
 };
 
 
