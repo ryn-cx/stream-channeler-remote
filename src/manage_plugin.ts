@@ -5,12 +5,7 @@ import {
   setChannelQueues,
   setLastChannelId,
 } from "./manage";
-import {
-  FADE_HIDDEN_STYLE,
-  createLogger,
-  fadeWhenIdle,
-  waitForElement,
-} from "./shared";
+import { FADE_HIDDEN_STYLE, createLogger, fadeWhenIdle } from "./shared";
 
 export interface ManagePluginConfig {
   website_name: string;
@@ -222,6 +217,7 @@ export function initManagePlugin(config: ManagePluginConfig): void {
     return !config.urlRegex || config.urlRegex.test(location.pathname);
   }
 
+  // TODO: Validate
   function ensureUI(): void {
     if (closed) return;
     if (!isValidPage() || config.isPlaybackActive?.()) {
@@ -229,6 +225,7 @@ export function initManagePlugin(config: ManagePluginConfig): void {
       return;
     }
     if (document.getElementById(containerId)) return;
+    if (!document.querySelector(config.waitSelector)) return;
     createUI();
   }
 
@@ -246,16 +243,10 @@ export function initManagePlugin(config: ManagePluginConfig): void {
 
   log.debug("Initializing on", location.href);
 
-  waitForElement<HTMLElement>(config.waitSelector)
-    .then(() => {
-      ensureUI();
-      fadeWhenIdle(() => document.getElementById(containerId));
-      new MutationObserver(onMutation).observe(document.body, {
-        childList: true,
-        subtree: true,
-      });
-    })
-    .catch(() => {
-      log.warn(`Could not find "${config.waitSelector}" to insert the UI`);
-    });
+  ensureUI();
+  fadeWhenIdle(() => document.getElementById(containerId));
+  new MutationObserver(onMutation).observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 }
