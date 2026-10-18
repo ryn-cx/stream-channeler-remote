@@ -27,11 +27,7 @@ module.exports = {
   version: version,
   author: author,
   description: description,
-  match: [
-    "https://streamchanneler.com/channels",
-    "https://streamchanneler.com/channels/*",
-    ...pluginMatches,
-  ],
+  match: ["https://streamchanneler.com/*", ...pluginMatches],
   source: repository.url,
   grant: [
     "GM_setValue",
@@ -40,7 +36,8 @@ module.exports = {
     "GM_deleteValue",
     "GM_registerMenuCommand",
     "GM_unregisterMenuCommand",
-    "unsafeWindow",
+    "GM_xmlhttpRequest",
   ],
+  connect: ["api.streamchanneler.com", "*"],
   "run-at": "document-end",
 };

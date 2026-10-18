@@ -1,9 +1,10 @@
 // TODO: Validate
 import {
-  addMenuCommand,
   clickWhenShown,
   createLogger,
+  currentTabStatus,
   initVideoPlugin,
+  isControlledTab,
   sleep,
   waitForElement,
   shouldSkipCredits,
@@ -15,7 +16,7 @@ export { hostnames, matches } from "./matches.cjs";
 const log = createLogger("Netflix");
 
 // The profile to pick on Netflix's "Who's watching?" screen, and its PIN if the
-// profile is locked. Set from the userscript manager's menu.
+// profile is locked.
 const PROFILE_NAME_KEY = "netflixProfileName";
 const PROFILE_PIN_KEY = "netflixProfilePin";
 
@@ -39,25 +40,6 @@ const PIN_INPUT_SELECTOR = [
   'input[type="tel"]',
   'input[maxlength="1"]',
 ].join(", ");
-
-// TODO: Validate
-function registerSettingsMenu(): void {
-  addMenuCommand("settings", "Set Netflix profile", () => {
-    const name = window.prompt(
-      "Netflix profile to select automatically (leave empty to disable):",
-      GM_getValue<string>(PROFILE_NAME_KEY, ""),
-    );
-    if (name === null) return;
-    GM_setValue(PROFILE_NAME_KEY, name.trim());
-
-    const pin = window.prompt(
-      "4-digit PIN for that profile (leave empty if it has no PIN):",
-      GM_getValue<string>(PROFILE_PIN_KEY, ""),
-    );
-    if (pin === null) return;
-    GM_setValue(PROFILE_PIN_KEY, pin.trim());
-  });
-}
 
 // Type a value into a React-controlled input: set it through the native setter
 // (so React notices the change) and fire the events Netflix listens for.
@@ -157,11 +139,9 @@ async function getPastProfileGate(): Promise<void> {
   await sleep(1000);
   if (isWatchPage()) return;
 
-  const target = GM_getValue<string | null>("loadingUrl", null);
+  const target = currentTabStatus()?.url;
   if (!target) return;
   log.log("Returning to", target, "after choosing the profile");
-  // The reload runs the plugin again, so let it claim the tab.
-  GM_setValue("loadingTab", true);
   location.assign(target);
   // Never resolve, so the URL watcher doesn't start on the way out.
   await new Promise<never>(() => {});
@@ -188,9 +168,10 @@ const player = {
 
 // TODO: Validate
 export function init(): void {
-  registerSettingsMenu();
   if (!isWatchPage()) {
-    if (GM_getValue("loadingTab", false)) void getPastProfileGate();
+    void isControlledTab().then((controlled) => {
+      if (controlled) void getPastProfileGate();
+    });
     return;
   }
   const introButtons = shouldSkipIntros() ? [skipIntro] : [];

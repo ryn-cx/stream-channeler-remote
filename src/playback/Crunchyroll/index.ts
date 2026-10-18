@@ -3,6 +3,7 @@ import {
   initVideoPlugin,
   shouldSkipCredits,
   shouldSkipIntros,
+  waitForElement,
 } from "../../shared";
 
 export { hostnames, matches } from "./matches.cjs";
@@ -18,7 +19,21 @@ const skipCredits = clickWhenShown(
 );
 
 // TODO: Validate
+function fitPlayerToWrapper(): void {
+  waitForElement<HTMLElement>(".video-player-wrapper", 60_000)
+    .then((wrapper) =>
+      wrapper.style.setProperty(
+        "grid-template-rows",
+        "minmax(0, 1fr)",
+        "important",
+      ),
+    )
+    .catch(() => {});
+}
+
+// TODO: Validate
 export function init(): void {
+  fitPlayerToWrapper();
   const introButtons = shouldSkipIntros() ? [skipIntro] : [];
   if (shouldSkipCredits()) {
     initVideoPlugin({

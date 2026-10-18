@@ -1,4 +1,20 @@
 // TODO: Validate
+import {
+  DVR_DETAIL_WIDTH_VW,
+  DVR_GUIDE_HEIGHT_VH,
+  isDvrGuideOpen,
+  mountDvrGuide,
+  toggleDvrGuide,
+} from "./dvr";
+import {
+  ALWAYS_SHOW_GUIDE_KEY,
+  listenForPlayRequests,
+  send,
+  SKIP_CREDITS_KEY,
+  SKIP_INTROS_KEY,
+  type TabStatus,
+} from "./remote";
+
 const REMOTE_LOG = "[Stream Channeler Remote]";
 
 export type WatchVideoSetting = boolean | number;
@@ -24,25 +40,27 @@ export function createLogger(site?: string): Logger {
   };
 }
 
-/**
- * Whether this tab was opened by Stream Channeler Remote. The first call in a
- * claimed tab consumes the marker, so a tab the user opens later isn't taken
- * over; call it once, at the start of a playback plugin.
- */
-export function claimTab(): boolean {
-  if (!GM_getValue("loadingTab", false)) return false;
-  GM_setValue("loadingTab", false);
-  return true;
+let tabStatus: TabStatus | null = null;
+
+// TODO: Validate
+export function currentTabStatus(): TabStatus | null {
+  return tabStatus;
+}
+
+// TODO: Validate
+export async function isControlledTab(): Promise<boolean> {
+  tabStatus ??= await send<TabStatus>({ type: "tab:hello" });
+  return tabStatus?.controlled ?? false;
 }
 
 // TODO: Validate
 export function shouldSkipIntros(): boolean {
-  return GM_getValue("skipIntros", true);
+  return GM_getValue(SKIP_INTROS_KEY, true);
 }
 
 // TODO: Validate
 export function shouldSkipCredits(): boolean {
-  return GM_getValue("skipCredits", true);
+  return GM_getValue(SKIP_CREDITS_KEY, true);
 }
 
 const menuSections = ["start", "settings", "builder"] as const;
@@ -79,26 +97,6 @@ export function addMenuCommand(
 ): void {
   menuCommands.push({ section, label, run });
   renderMenu();
-}
-
-const skipSettings = [
-  { key: "skipIntros", noun: "intros" },
-  { key: "skipCredits", noun: "credits" },
-];
-
-// TODO: Validate
-export function registerSkipMenus(): void {
-  for (const { key, noun } of skipSettings) {
-    addMenuCommand(
-      "settings",
-      () =>
-        GM_getValue(key, true)
-          ? `Skipping ${noun} (click to play ${noun})`
-          : `Playing ${noun} (click to skip ${noun})`,
-      () => GM_setValue(key, !GM_getValue(key, true)),
-    );
-    GM_addValueChangeListener(key, renderMenu);
-  }
 }
 
 // TODO: Validate
@@ -184,19 +182,18 @@ let autoControlStopped = false;
 // Mark automatic control as stopped so signalEpisodeEnded() stops advancing the
 // channel and the current tab stays open. Exposed so plugins can wire it up to
 // their own stop control (e.g. NHK embeds one in the player's control bar).
+// TODO: Validate
 export function stopAutoControl(log: Logger): void {
   autoControlStopped = true;
   log.log("Automatic control stopped by user");
-  // Tell the controller on the channels page to stop too, so its Start/Stop
-  // Remote button updates. A fresh timestamp guarantees a value change.
-  GM_setValue("remoteStopRequested", Date.now());
+  void send({ type: "tab:stop" });
 }
 
 // TODO: Validate
 export function resumeAutoControl(log: Logger): void {
   autoControlStopped = false;
   log.log("Automatic control resumed by user");
-  GM_setValue("remoteResumeRequested", Date.now());
+  void send({ type: "tab:resume" });
 }
 
 // Icons as structured data (root svg attrs + child shapes). Built via
@@ -260,22 +257,87 @@ function createOverlayButton(
 // place (the element never moves, so there's no reload). Styles are inline via
 // CSSOM (not an injected <style>) so a strict CSP can't block them. Pass the
 // player *wrapper* that contains the site's own controls so they come along into
-// fullscreen. There's no undo: stopping auto control and refreshing the page
-// restores the original layout.
-const FAKE_FULLSCREEN_CLASS = "scr-fake-fullscreen";
-export function setFakeFullscreen(target: HTMLElement): void {
-  if (target.classList.contains(FAKE_FULLSCREEN_CLASS)) return;
+// fullscreen. Controller-opened tabs have no undo: stopping auto control and
+// refreshing the page restores the original layout. Tabs the user opened only
+// go fake fullscreen while the guide is open, and are restored when it closes.
+interface FakeFullscreen {
+  target: HTMLElement;
+  observer: MutationObserver;
+  original: Map<HTMLElement, Map<string, [string, string]>>;
+  forGuide: boolean;
+}
 
+let fakeFullscreen: FakeFullscreen | null = null;
+
+let guidePlayer: { videoSelector: string; playerSelectors: string[] } | null =
+  null;
+
+// TODO: Validate
+function fakeFullscreenBox(): Record<string, string> {
+  return isDvrGuideOpen()
+    ? {
+        left: `${DVR_DETAIL_WIDTH_VW}vw`,
+        width: `${100 - DVR_DETAIL_WIDTH_VW}vw`,
+        height: `${100 - DVR_GUIDE_HEIGHT_VH}vh`,
+      }
+    : { left: "0", width: "100vw", height: "100vh" };
+}
+
+// TODO: Validate
+function setFakeFullscreenStyle(
+  state: FakeFullscreen,
+  el: HTMLElement,
+  prop: string,
+  value: string,
+): void {
+  let props = state.original.get(el);
+  if (!props) {
+    props = new Map();
+    state.original.set(el, props);
+  }
+  if (!props.has(prop)) {
+    props.set(prop, [
+      el.style.getPropertyValue(prop),
+      el.style.getPropertyPriority(prop),
+    ]);
+  }
+  el.style.setProperty(prop, value, "important");
+}
+
+// TODO: Validate
+export function fitFakeFullscreen(): void {
+  if (isDvrGuideOpen() && !fakeFullscreen && guidePlayer) {
+    const video = findVideo(guidePlayer.videoSelector);
+    if (video) {
+      setFakeFullscreen(findPlayer(video, guidePlayer.playerSelectors), true);
+    }
+  } else if (!isDvrGuideOpen() && fakeFullscreen?.forGuide) {
+    exitFakeFullscreen(fakeFullscreen);
+  }
+  if (fakeFullscreen) {
+    for (const [prop, value] of Object.entries(fakeFullscreenBox())) {
+      setFakeFullscreenStyle(
+        fakeFullscreen,
+        fakeFullscreen.target,
+        prop,
+        value,
+      );
+    }
+  }
+  window.dispatchEvent(new Event("resize"));
+}
+
+// TODO: Validate
+function applyFakeFullscreenStyles(state: FakeFullscreen): void {
+  const { target } = state;
   for (const [prop, value] of Object.entries({
     position: "fixed",
     top: "0",
-    left: "0",
-    width: "100vw",
-    height: "100vh",
+    ...fakeFullscreenBox(),
     "z-index": "2147483646",
     background: "#000",
   })) {
-    target.style.setProperty(prop, value, "important");
+    setFakeFullscreenStyle(state, target, prop, value);
   }
   // A fixed player can be trapped inside a transformed ancestor's stacking
   // context, so other page elements paint over it. Lift every ancestor to the
@@ -287,13 +349,60 @@ export function setFakeFullscreen(target: HTMLElement): void {
     el && el !== document.body && el !== document.documentElement;
     el = el.parentElement
   ) {
-    el.style.setProperty("z-index", "2147483646", "important");
+    setFakeFullscreenStyle(state, el, "z-index", "2147483646");
     if (getComputedStyle(el).position === "static") {
-      el.style.setProperty("position", "relative", "important");
+      setFakeFullscreenStyle(state, el, "position", "relative");
     }
   }
-  document.documentElement.style.overflow = "hidden";
-  target.classList.add(FAKE_FULLSCREEN_CLASS);
+}
+
+// TODO: Validate
+export function setFakeFullscreen(target: HTMLElement, forGuide = false): void {
+  if (fakeFullscreen) {
+    if (!forGuide) fakeFullscreen.forGuide = false;
+    return;
+  }
+
+  let parent = target.parentElement;
+  const state: FakeFullscreen = {
+    target,
+    original: new Map(),
+    forGuide,
+    observer: new MutationObserver(() => {
+      if (
+        target.parentElement === parent &&
+        target.style.getPropertyValue("position") === "fixed"
+      ) {
+        return;
+      }
+      parent = target.parentElement;
+      applyFakeFullscreenStyles(state);
+    }),
+  };
+  fakeFullscreen = state;
+  applyFakeFullscreenStyles(state);
+  setFakeFullscreenStyle(state, document.documentElement, "overflow", "hidden");
+  state.observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["style"],
+  });
+}
+
+// TODO: Validate
+function exitFakeFullscreen(state: FakeFullscreen): void {
+  state.observer.disconnect();
+  for (const [el, props] of state.original) {
+    for (const [prop, [value, priority]] of props) {
+      if (value) {
+        el.style.setProperty(prop, value, priority);
+      } else {
+        el.style.removeProperty(prop);
+      }
+    }
+  }
+  fakeFullscreen = null;
 }
 
 /**
@@ -401,11 +510,7 @@ export function fadeWhenIdle(getElement: () => HTMLElement | null): void {
 export function mountPlayerControls(log: Logger): void {
   if (document.getElementById("stream-channeler-controls")) return;
 
-  const container = document.createElement("div");
-  container.id = "stream-channeler-controls";
-  container.style.cssText =
-    "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;";
-  fadeWhenIdle(() => container);
+  const container = createControlsContainer();
 
   const stopIcon: IconSpec = {
     attrs: {
@@ -435,8 +540,8 @@ export function mountPlayerControls(log: Logger): void {
   const stopButton = createOverlayButton(
     document,
     "stream-channeler-stop-btn",
-    "Stop Auto Control",
-    stopIcon,
+    autoControlStopped ? "Resume Auto Control" : "Stop Auto Control",
+    autoControlStopped ? resumeIcon : stopIcon,
     () => {
       const [icon, label] = autoControlStopped
         ? [stopIcon, "Stop Auto Control"]
@@ -448,37 +553,6 @@ export function mountPlayerControls(log: Logger): void {
       }
       stopButton.title = label;
       setButtonContent(document, stopButton, icon, label);
-    },
-  );
-
-  const refreshButton = createOverlayButton(
-    document,
-    "stream-channeler-refresh-btn",
-    "Refresh",
-    {
-      attrs: {
-        viewBox: "0 0 24 24",
-        width: "16",
-        height: "16",
-        fill: "none",
-        stroke: "currentColor",
-        "stroke-width": "2",
-        "stroke-linecap": "round",
-        "stroke-linejoin": "round",
-        "aria-hidden": "true",
-      },
-      shapes: [
-        {
-          tag: "path",
-          attrs: { d: "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" },
-        },
-        { tag: "path", attrs: { d: "M21 3v5h-5" } },
-      ],
-    },
-    () => {
-      if (!autoControlStopped) GM_setValue("loadingTab", true);
-      log.log("Refreshing the page");
-      location.reload();
     },
   );
 
@@ -534,7 +608,66 @@ export function mountPlayerControls(log: Logger): void {
     },
   );
 
-  container.append(refreshButton, previousButton, nextButton, stopButton);
+  container.append(previousButton, nextButton, stopButton);
+  container.prepend(createGuideButton(log));
+  attachControls(log, container);
+}
+
+// TODO: Validate
+export function mountGuideControls(log: Logger): void {
+  if (document.getElementById("stream-channeler-controls")) return;
+
+  const container = createControlsContainer();
+  container.append(createGuideButton(log));
+  attachControls(log, container);
+}
+
+// TODO: Validate
+function createControlsContainer(): HTMLDivElement {
+  const container = document.createElement("div");
+  container.id = "stream-channeler-controls";
+  container.style.cssText =
+    "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;";
+  fadeWhenIdle(() => container);
+  return container;
+}
+
+// TODO: Validate
+function createGuideButton(log: Logger): HTMLButtonElement {
+  mountDvrGuide(log);
+  return createOverlayButton(
+    document,
+    "stream-channeler-guide-btn",
+    "Guide",
+    {
+      attrs: {
+        viewBox: "0 0 24 24",
+        width: "16",
+        height: "16",
+        fill: "none",
+        stroke: "currentColor",
+        "stroke-width": "2",
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+        "aria-hidden": "true",
+      },
+      shapes: [
+        {
+          tag: "rect",
+          attrs: { x: "2", y: "3", width: "20", height: "14", rx: "2" },
+        },
+        { tag: "path", attrs: { d: "M2 9h20" } },
+        { tag: "path", attrs: { d: "M9 9v8" } },
+        { tag: "path", attrs: { d: "M12 17v4" } },
+        { tag: "path", attrs: { d: "M8 21h8" } },
+      ],
+    },
+    toggleDvrGuide,
+  );
+}
+
+// TODO: Validate
+function attachControls(log: Logger, container: HTMLDivElement): void {
   document.body.appendChild(container);
   log.debug("Player controls overlay added");
 
@@ -612,9 +745,10 @@ export function signalPreviousEpisode(log: Logger, reason: string): void {
   }
 
   leaveEpisode(log, reason, () => {
-    log.log("Going back to the previous episode, closing tab");
-    GM_setValue("previousEpisodeRequested", Date.now());
-    window.close();
+    log.log("Going back to the previous episode");
+    void send({ type: "tab:previous", reason }).finally(() => {
+      episodeEndSignaled = false;
+    });
   });
 }
 
@@ -627,20 +761,10 @@ export function signalEpisodeEnded(log: Logger, reason: string): void {
   }
 
   leaveEpisode(log, reason, () => {
-    log.log("Episode ended, closing tab");
-    const now = Date.now();
-    const current = GM_getValue("videoEnded", 0) as number;
-    log.debug("videoEnded:", current, "now:", now);
-    // Only signal if the current value is older (stop sets it to far future)
-    if (now > current) {
-      log.debug("Setting videoEnded to", now);
-      GM_setValue("videoEnded", now);
-    } else {
-      log.warn(
-        "Not signaling: videoEnded is newer than now (was the remote stopped?)",
-      );
-    }
-    window.close();
+    log.log("Episode ended, waiting for the next one");
+    void send({ type: "tab:ended", reason }).finally(() => {
+      episodeEndSignaled = false;
+    });
   });
 }
 
@@ -693,54 +817,19 @@ export function watchUrlChange(log: Logger, delayMs = 0): void {
   }, delayMs);
 }
 
-/**
- * Generic plugin for sites where episode end is detected by URL change. When
- * `playerSelectors` is given, the player is also fake-fullscreened with the
- * overlay controls; otherwise only the floating stop button is shown. `start`
- * runs first, for pages that need a click to begin playback (it should resolve
- * once the site has navigated to the player, so that navigation isn't mistaken
- * for the end of the episode). With `watchVideo`, the end of the <video> also
- * counts, for sites that only sometimes navigate when an episode finishes; a
- * number waits that many seconds after the video finishes before moving on.
- */
-export async function initUrlChangePlugin(
-  name: string,
-  playerSelectors?: string[],
-  start?: (log: Logger) => Promise<void>,
-  {
-    watchVideo = false,
-    debug = false,
-  }: { watchVideo?: WatchVideoSetting; debug?: boolean } = {},
-): Promise<void> {
-  const log = createLogger(name);
-  if (!claimTab()) {
-    log.debug("Tab not opened by the remote, skipping");
-    return;
+// TODO: Validate
+async function initTab(log: Logger, debug: boolean): Promise<boolean> {
+  if (!(await isControlledTab())) {
+    log.debug("Tab not opened by the remote, leaving it alone");
+    if (GM_getValue(ALWAYS_SHOW_GUIDE_KEY, true)) mountGuideControls(log);
+    return false;
   }
+  autoControlStopped = tabStatus?.stopped ?? false;
+  log.log("Tab controlled by Stream Channeler Remote");
   if (debug) enableDebug();
-
-  if (start) {
-    try {
-      await start(log);
-    } catch (error) {
-      log.error("Could not start playback:", error);
-      mountPlayerControls(log);
-      return;
-    }
-  }
-
-  watchUrlChange(log);
-  if (watchVideo !== false) watchVideoCompletion(log, "video", watchVideo);
-  if (!playerSelectors) {
-    mountPlayerControls(log);
-    return;
-  }
-  waitForElement<HTMLVideoElement>("video")
-    .then((video) => expandPlayer(log, video, playerSelectors))
-    .catch((error: unknown) => {
-      log.warn("No video found; showing stop button only:", error);
-      mountPlayerControls(log);
-    });
+  mountPlayerControls(log);
+  listenForPlayRequests();
+  return true;
 }
 
 // Climb from the <video> while each parent is still the same size as the video.
@@ -767,6 +856,18 @@ function findSameSizeWrapper(video: HTMLElement): HTMLElement {
   return wrapper === video ? (video.parentElement ?? video) : wrapper;
 }
 
+// TODO: Validate
+function findPlayer(
+  video: HTMLElement,
+  playerSelectors: string[],
+): HTMLElement {
+  for (const selector of playerSelectors) {
+    const player = video.closest<HTMLElement>(selector);
+    if (player) return player;
+  }
+  return findSameSizeWrapper(video);
+}
+
 /**
  * Fake-fullscreen the wrapper that holds the site's own controls (not the bare
  * <video>, or the controls are left behind on the page) and mount the overlay
@@ -778,24 +879,17 @@ export async function expandPlayer(
   video: HTMLElement,
   playerSelectors: string[] = [],
 ): Promise<void> {
-  let player: HTMLElement | null = null;
-  for (const selector of playerSelectors) {
-    player = video.closest<HTMLElement>(selector);
-    if (player) break;
-  }
-  player ??= findSameSizeWrapper(video);
-  const target = player;
+  const target = findPlayer(video, playerSelectors);
   log.debug("Fullscreen target:", target);
 
   try {
-    mountPlayerControls(log);
     // These players keep restyling themselves while they lay out after load, so
     // wait for that to stop or our fullscreen styles get overwritten.
     await waitForQuiet(target);
     setFakeFullscreen(target);
     log.debug("Fullscreen applied");
   } catch (error) {
-    log.error("Controls/fullscreen setup failed:", error);
+    log.error("Fullscreen setup failed:", error);
   }
 }
 
@@ -807,8 +901,7 @@ export interface VideoPluginConfig {
    * both the <video> and the site's own controls. When given, the player is
    * fake-fullscreened: they're tried in order via `video.closest()` and the
    * first hit is expanded, falling back to the outermost wrapper the same size
-   * as the video when none match. Leave it out for sites whose player already
-   * fills the window, where restyling it only shrinks it.
+   * as the video when none match or when it is left out.
    */
   playerToFullscreen?: string[];
   /** Selector for the <video> element. Defaults to any video on the page. */
@@ -861,18 +954,22 @@ const VIDEO_POLL_MS = 1000;
 
 // TODO: Validate
 function findVideo(selector: string): HTMLVideoElement | null {
-  const video = document.querySelector<HTMLVideoElement>(selector);
-  if (video) return video;
+  const documents: Document[] = [document];
   for (const frame of Array.from(document.querySelectorAll("iframe"))) {
     try {
-      const framed =
-        frame.contentDocument?.querySelector<HTMLVideoElement>(selector);
-      if (framed) return framed;
+      if (frame.contentDocument) documents.push(frame.contentDocument);
     } catch {
       continue;
     }
   }
-  return null;
+  const videos = documents.flatMap((doc) =>
+    Array.from(doc.querySelectorAll<HTMLVideoElement>(selector)),
+  );
+  return (
+    videos.find((video) => video.getBoundingClientRect().width > 0) ??
+    videos[0] ??
+    null
+  );
 }
 
 // TODO: Validate
@@ -904,22 +1001,51 @@ export async function initVideoPlugin(
   config: VideoPluginConfig,
 ): Promise<void> {
   const log = createLogger(config.name);
-  if (!claimTab()) return;
-  if (config.debug) enableDebug();
-
   const videoSelector = config.videoSelector ?? "video";
-  log.log("Tab opened by Stream Channeler Remote, initializing");
+  guidePlayer = {
+    videoSelector,
+    playerSelectors: config.playerToFullscreen ?? [],
+  };
+  if (!(await initTab(log, config.debug ?? false))) return;
+  const navigation = performance.getEntriesByType("navigation")[0] as
+    | PerformanceNavigationTiming
+    | undefined;
+  const opened =
+    (await send<boolean>({ type: "tab:opened" })) ||
+    (!autoControlStopped && navigation?.type === "reload");
 
-  if (config.start) {
+  if (opened && config.start) {
     try {
       await config.start(log);
     } catch (error) {
       log.error("Could not start playback:", error);
-      mountPlayerControls(log);
       return;
     }
   }
 
+  watchEpisode(log, config, videoSelector);
+  if (!opened) return;
+
+  let video: HTMLVideoElement;
+  try {
+    video = await waitForVideo(videoSelector);
+  } catch (error) {
+    log.warn("No video found to make fullscreen or start:", error);
+    return;
+  }
+  await expandPlayer(log, video, config.playerToFullscreen);
+  if (config.manualAutoplay ?? true) {
+    log.log("Starting playback of the episode the remote opened");
+    startPlayback(log, videoSelector);
+  }
+}
+
+// TODO: Validate
+function watchEpisode(
+  log: Logger,
+  config: VideoPluginConfig,
+  videoSelector: string,
+): void {
   const { endSelector, isEnded } = config;
   for (const selector of [endSelector ?? []].flat()) {
     watchEndCheck(
@@ -932,25 +1058,6 @@ export async function initVideoPlugin(
   for (const clickButton of config.clickButtons ?? []) {
     keepTrying(log, `Clicked ${clickButton.name}`, clickButton);
   }
-
-  let video: HTMLVideoElement;
-  try {
-    video = await waitForVideo(videoSelector);
-  } catch (error) {
-    log.warn("No video found; falling back to URL watching:", error);
-    mountPlayerControls(log);
-    watchUrlChange(log, config.urlChangeDelayMs);
-    return;
-  }
-
-  if (config.playerToFullscreen) {
-    await expandPlayer(log, video, config.playerToFullscreen);
-  } else {
-    mountPlayerControls(log);
-  }
-
-  if (config.manualAutoplay ?? true) startPlayback(log, videoSelector);
-
   if (
     config.watchForVideoForCompletion !== undefined &&
     config.watchForVideoForCompletion !== false
@@ -959,6 +1066,11 @@ export async function initVideoPlugin(
   }
   if (config.watcForhUrlChange) {
     watchUrlChange(log, config.urlChangeDelayMs);
+  } else {
+    waitForVideo(videoSelector).catch((error: unknown) => {
+      log.warn("No video found; falling back to URL watching:", error);
+      watchUrlChange(log, config.urlChangeDelayMs);
+    });
   }
   log.debug("Watching for the end of the episode");
 }
