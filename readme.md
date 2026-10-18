@@ -13,6 +13,12 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 2. Click **Start Remote**
 3. Episodes will open, play, and advance automatically
 
+Episodes play one after another in a single tab, and keep going after you close the channel page. Video pages are only touched when the script opened them, either from the remote, a custom channel or a pick in the guide. Those tabs get the overlay buttons, intro/credits skipping and end-of-episode handling, plus fullscreen and autoplay when the page loads, including after a reload. Tabs you open yourself are left alone, apart from the **Guide** button (see [Stream Channeler DVR](#stream-channeler-dvr)).
+
+### Settings
+
+Open your userscript manager's menu on any supported page and choose **Settings** to see what's playing, stop it, open the guide, and change the options below.
+
 ## Supported Sites
 
 | Site        | Skip Credits | Play Credits | Skip Introduction | Profile Management | Note                                                                                                                                                                                                    |
@@ -35,8 +41,20 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 
 ### Intros and credits
 
-Intros and credits are skipped by default. To change this, open your userscript manager's menu on any page and click **Skipping intros** or **Skipping credits** to switch it to **Playing intros** or **Playing credits**. Click it again to switch back. The setting applies to every supported site.
+Intros and credits are skipped by default. To change this, uncheck **Skip intros** or **Skip credits** in **Settings**. The setting applies to every supported site.
 
 ### Netflix profile
 
-If Netflix asks "Who's watching?", the script can pick your profile automatically. On any Netflix page, open your userscript manager's menu, choose **Set Netflix profile**, and enter the profile name and, if the profile is locked, its 4-digit PIN.
+If Netflix asks "Who's watching?", the script can pick your profile automatically. Enter the profile name and, if the profile is locked, its 4-digit PIN under **Netflix profile** in **Settings**.
+
+### Custom channel
+
+To play your own list of videos, paste their URLs, one per line, under **Custom channel** in **Settings** and click **Play custom channel**.
+
+### Stream Channeler DVR
+
+While a program plays, press **G** or click **Guide** to bring up the Stream Channeler guide over the video. Press **G** or **Esc** to hide it again. The **Guide** button also shows on video pages you open yourself, even when nothing is playing. To show it only while a program plays, uncheck **Always show guide button** in **Settings**. On any other supported page, including streamchanneler.com, choose **Open guide** from your userscript manager's menu.
+
+The guide is built from the data Stream Channeler keeps in your browser, so it shows the channels you have opened on streamchanneler.com. Keep a streamchanneler.com tab open to keep it current; click **Refresh** in the guide to pick up the latest copy. Type in the search box to filter channels by name or number, and click **★ Favorites** to show only your favorite channels. The dropdown left of the search box picks the channel order: **Current sort** lists channels by number, and **Random** shuffles them (switching to **Random** again gives a new shuffle). Each channel starts with its first 20 episodes. Under a channel's name, click **More** to load the rest, or **Refresh** to reload that channel's episodes. While the guide is open, the video shrinks to the top right and the details of the program you hover over appear beside it.
+
+Picking a program in the guide switches to Stream Channeler DVR, which plays programs from the guide's channels like a TV: when a program ends, the next program on the same channel plays in the same tab. If the remote was running, it stops so the two don't fight over playback.

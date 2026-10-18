@@ -66,6 +66,7 @@ export function init(): void {
   if (shouldSkipCredits()) {
     initVideoPlugin({
       name: "Disney+",
+      playerToFullscreen: [".btm-media-player"],
       // Detect the end of a series or the end of a movie.
       endSelector: '[data-testid="explore-post-play-view"]',
       isEnded: isEndCardCloseShown,
@@ -76,6 +77,7 @@ export function init(): void {
   } else {
     initVideoPlugin({
       name: "Disney+",
+      playerToFullscreen: [".btm-media-player"],
       clickButtons: [...introButtons, closeEndCard],
       // The URL eventually changes, but there may be a small delay and some credits are
       // actually skipped.

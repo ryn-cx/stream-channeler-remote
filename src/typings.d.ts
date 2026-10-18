@@ -19,16 +19,27 @@ declare function GM_addValueChangeListener(
     remote: boolean,
   ) => void,
 ): number;
-// Firefox: expose a sandbox function to the page (needed to patch page globals).
-declare function exportFunction<T extends (...args: never[]) => unknown>(
-  fn: T,
-  target: object,
-): T;
 declare function GM_registerMenuCommand(
   name: string,
   callback: () => void,
 ): number;
 declare function GM_unregisterMenuCommand(id: number): void;
+interface GMXhrResponse {
+  status: number;
+  responseText: string;
+  response: unknown;
+}
+declare function GM_xmlhttpRequest(details: {
+  method: "GET" | "POST";
+  url: string;
+  headers?: Record<string, string>;
+  data?: string;
+  responseType?: "text" | "blob" | "arraybuffer";
+  timeout?: number;
+  onload?: (response: GMXhrResponse) => void;
+  onerror?: (response: unknown) => void;
+  ontimeout?: () => void;
+}): void;
 
 interface Element {
   checkVisibility(options?: {
