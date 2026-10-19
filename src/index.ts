@@ -1,10 +1,16 @@
 // TODO: Validate
 import { initManage } from "./manage";
-import { bridgeDvrPage, openDvrGuide, storeDvrToken } from "./dvr";
+import {
+  bridgeDvrPage,
+  mountSiteGuideLink,
+  openDvrGuide,
+  storeDvrToken,
+} from "./dvr";
 import { initRemoteButton } from "./remote_button";
 import { startGuideSync } from "./site_cache";
 import { openSettingsPanel } from "./settings_panel";
-import { addMenuCommand, createLogger } from "./shared";
+import { ALWAYS_SHOW_GUIDE_KEY } from "./remote";
+import { addMenuCommand, createLogger, mountGuideControls } from "./shared";
 
 interface Plugin {
   hostnames: string[];
@@ -51,13 +57,29 @@ if (window.top === window) {
   addMenuCommand("settings", "Settings", openSettingsPanel);
 }
 
-if (playbackPlugin) playbackPlugin.init();
-if (managePlugin) managePlugin.init();
+const isApp = typeof STREAM_CHANNELER_APP !== "undefined";
+const isStreamChanneler = location.hostname.includes("streamchanneler.com");
 
-if (location.hostname.includes("streamchanneler.com")) {
+if (playbackPlugin) {
+  playbackPlugin.init();
+} else if (
+  isApp &&
+  !isStreamChanneler &&
+  window.top === window &&
+  GM_getValue(ALWAYS_SHOW_GUIDE_KEY, true)
+) {
+  mountGuideControls(createLogger("Guide"));
+}
+if (managePlugin && !isApp) managePlugin.init();
+
+if (isStreamChanneler) {
   storeDvrToken();
   bridgeDvrPage();
   startGuideSync();
   initRemoteButton();
-  initManage();
+  if (!isApp) initManage();
+  mountSiteGuideLink(createLogger("Guide"));
+  if (window.top === window && location.hash === "#guide") {
+    openDvrGuide(createLogger("Guide"));
+  }
 }

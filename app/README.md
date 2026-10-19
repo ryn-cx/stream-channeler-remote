@@ -4,11 +4,14 @@ An Android TV, Google TV and Fire TV app that runs the Stream Channeler Remote u
 
 ## Build
 
-You need the Android SDK (`ANDROID_HOME` set, or a `local.properties` with `sdk.dir`), JDK 17 or newer, and Node with the userscript's dependencies installed (`npm install` in the repository root).
+You need the Android SDK, JDK 17 or newer, and Node. On Windows, run:
 
-```sh
-./gradlew assembleRelease
+```powershell
+.\compile.ps1          # release APKs
+.\compile.ps1 debug    # debug APKs
 ```
+
+It installs the userscript's dependencies if needed, uses the SDK from `ANDROID_HOME`, `local.properties` or the default `%LOCALAPPDATA%\Android\Sdk`, and prints the paths of the APKs it built. Elsewhere, run `npm install` in the repository root and then `./gradlew assembleRelease` here.
 
 This rebuilds the userscript (`npm run build`), wraps it in the small built-in extension in [extension](extension), and writes one APK per CPU type to `build/outputs/apk/release/`:
 
@@ -24,7 +27,7 @@ Without a signing key, release builds are signed with the debug key. To sign wit
 
 ## How the userscript runs
 
-GeckoView can't install a userscript manager, so the app ships a minimal built-in extension instead. Its content script runs the userscript on the same pages as its `@match` lines (read from the built userscript at build time) and provides the `GM_*` functions it uses: values live in extension storage, `GM_xmlhttpRequest` goes through the background script, and menu commands are kept so the remote's Menu button can run **Settings**.
+GeckoView can't install a userscript manager, so the app ships a minimal built-in extension instead. Its content script runs the userscript on every page: in all frames on the pages its `@match` lines list (read from the built userscript at build time), and in the top frame everywhere else so the **Guide** button shows on any site. It also provides the `GM_*` functions it uses: values live in extension storage, `GM_xmlhttpRequest` goes through the background script, and menu commands are kept so the remote's Menu button can run **Settings**. The add-to-channel tools are turned off in the app.
 
 ## Install
 

@@ -7,6 +7,7 @@ import { fitFakeFullscreen, type Logger } from "./shared";
 const MESSAGE_SOURCE = "stream-channeler-dvr";
 const REOPEN_GUIDE_KEY = "reopenGuideAt";
 const REOPEN_GUIDE_MS = 60_000;
+const SITE_GUIDE_LINK_CLASS = "scr-site-guide-link";
 export const DVR_GUIDE_HEIGHT_VH = 65;
 export const DVR_DETAIL_WIDTH_VW = 40;
 const FRAME_STYLE = `position:fixed;left:0;right:0;bottom:0;width:100vw;height:${DVR_GUIDE_HEIGHT_VH}vh;border:0;border-top:1px solid #303030;z-index:2147483647;background:#0a0a0a;color-scheme:dark;box-shadow:0 -8px 24px rgba(0,0,0,0.6);`;
@@ -146,4 +147,31 @@ export function mountDvrGuide(log: Logger): void {
 export function openDvrGuide(log: Logger): void {
   mountDvrGuide(log);
   setDvrGuideOpen(true);
+}
+
+// TODO: Validate
+export function mountSiteGuideLink(log: Logger): void {
+  if (window.top !== window) return;
+  mountDvrGuide(log);
+  const addLinks = (): void => {
+    document
+      .querySelectorAll<HTMLAnchorElement>('nav a[href="/about"]')
+      .forEach((about) => {
+        if (about.parentElement?.querySelector(`.${SITE_GUIDE_LINK_CLASS}`)) {
+          return;
+        }
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = `text-sm transition-colors hover:text-foreground text-muted-foreground font-medium ${SITE_GUIDE_LINK_CLASS}`;
+        link.style.cursor = "pointer";
+        link.textContent = "Guide";
+        link.addEventListener("click", toggleDvrGuide);
+        about.after(link);
+      });
+  };
+  addLinks();
+  new MutationObserver(addLinks).observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 }

@@ -55,9 +55,9 @@ class Cursor(
     val view = CursorView(context).apply { visibility = View.INVISIBLE }
 
     private val density = context.resources.displayMetrics.density
-    private val minSpeed = 3f * density
-    private val maxSpeed = 24f * density
-    private val acceleration = 0.6f * density
+    private val minSpeed = 1.5f * density
+    private val maxSpeed = 14f * density
+    private val acceleration = 0.25f * density
     private val held = mutableSetOf<Int>()
     private var speed = minSpeed
     private var pressing = false

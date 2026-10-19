@@ -1,3 +1,4 @@
+var STREAM_CHANNELER_APP = true;
 var gmValues = {};
 var gmValueListeners = new Map();
 var gmMenuCommands = new Map();

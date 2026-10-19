@@ -15,6 +15,13 @@
       "js": ["gm.js", "userscript.js"],
       "run_at": "document_end",
       "all_frames": true
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "exclude_matches": [],
+      "js": ["gm.js", "userscript.js"],
+      "run_at": "document_end",
+      "all_frames": false
     }
   ],
   "browser_specific_settings": {
