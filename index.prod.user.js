@@ -54,6 +54,8 @@ const PIXELS_PER_MINUTE = 6;
 const CHANNEL_SEED_KEY = "guideChannelSeed";
 const CHANNEL_COLUMN_PX = 176;
 const FAVORITES_ONLY_KEY = "guideFavoritesOnly";
+const OWNED_ONLY_KEY = "guideOwnedOnly";
+const SCOPE_KEYS = [FAVORITES_ONLY_KEY, OWNED_ONLY_KEY];
 const REFRESH_TIMEOUT_MS = 4000;
 const VIEW_KEY = "guideView";
 const VIEW_SAVE_MS = 250;
@@ -386,40 +388,55 @@ function createNativeGuide(options) {
         if (cache)
             renderGuide(cache);
     });
-    const favorites = el("button", "action", "★ Favorites");
-    favorites.type = "button";
-    let favoritesStatus = "idle";
-    const styleFavorites = () => {
-        const on = GM_getValue(FAVORITES_ONLY_KEY, false);
-        favorites.className = on ? "action on" : "action";
-        favorites.setAttribute("aria-pressed", String(on));
-        favorites.textContent =
-            favoritesStatus === "loading"
-                ? "★ Loading…"
-                : favoritesStatus === "failed"
-                    ? "★ Favorites (couldn't load)"
-                    : "★ Favorites";
-    };
-    styleFavorites();
-    favorites.addEventListener("click", () => {
-        const on = !GM_getValue(FAVORITES_ONLY_KEY, false);
-        GM_setValue(FAVORITES_ONLY_KEY, on);
-        favoritesStatus = on ? "loading" : "idle";
-        styleFavorites();
-        if (cache)
-            renderGuide(cache);
-        if (!on)
-            return;
-        (0,site_cache/* loadFavoriteChannels */.Lz)()
-            .then(() => {
-            favoritesStatus = "idle";
-        })
-            .catch((error) => {
-            log.warn("Couldn't load favorite channels:", error);
-            favoritesStatus = "failed";
-        })
-            .finally(styleFavorites);
-    });
+    const scopeStylers = [];
+    // TODO: Validate
+    function scopeButton(label, key, load) {
+        const button = el("button", "action", label);
+        button.type = "button";
+        let status = "idle";
+        const style = () => {
+            const on = GM_getValue(key, false);
+            button.className = on ? "action on" : "action";
+            button.setAttribute("aria-pressed", String(on));
+            button.textContent =
+                status === "loading"
+                    ? `${label} (loading…)`
+                    : status === "failed"
+                        ? `${label} (couldn't load)`
+                        : label;
+        };
+        scopeStylers.push(style);
+        style();
+        button.addEventListener("click", () => {
+            const on = !GM_getValue(key, false);
+            for (const other of SCOPE_KEYS)
+                GM_setValue(other, false);
+            GM_setValue(key, on);
+            status = on ? "loading" : "idle";
+            for (const restyle of scopeStylers)
+                restyle();
+            if (cache)
+                renderGuide(cache);
+            if (!on)
+                return;
+            load()
+                .then(() => {
+                status = "idle";
+            })
+                .catch((error) => {
+                log.warn(`Couldn't load ${label} channels:`, error);
+                status = "failed";
+            })
+                .finally(style);
+        });
+        return button;
+    }
+    // TODO: Validate
+    function isScoped() {
+        return SCOPE_KEYS.some((key) => GM_getValue(key, false));
+    }
+    const favorites = scopeButton("★ Favorites", FAVORITES_ONLY_KEY, site_cache/* loadFavoriteChannels */.Lz);
+    const owned = scopeButton("Owned", OWNED_ONLY_KEY, site_cache/* loadOwnedChannels */.c_);
     const close = el("button", "action", "Close");
     close.type = "button";
     close.addEventListener("click", options.onClose);
@@ -529,9 +546,7 @@ function createNativeGuide(options) {
         pageUp.disabled = content.scrollTop <= 0;
         pageDown.disabled =
             atBottom &&
-                (GM_getValue(FAVORITES_ONLY_KEY, false) ||
-                    moreStatus === "loading" ||
-                    moreStatus === "done");
+                (isScoped() || moreStatus === "loading" || moreStatus === "done");
         hTrack.style.visibility = max > 0 ? "visible" : "hidden";
         pageLeft.disabled = max <= 0;
         pageRight.disabled = max <= 0;
@@ -556,9 +571,7 @@ function createNativeGuide(options) {
     // TODO: Validate
     function pageVertically(direction) {
         const maxTop = content.scrollHeight - content.clientHeight;
-        if (direction > 0 &&
-            content.scrollTop >= maxTop - 1 &&
-            !GM_getValue(FAVORITES_ONLY_KEY, false)) {
+        if (direction > 0 && content.scrollTop >= maxTop - 1 && !isScoped()) {
             loadMoreChannels();
             return;
         }
@@ -605,7 +618,7 @@ function createNativeGuide(options) {
         });
     }
     new ResizeObserver(updateScrollbar).observe(content);
-    const scroller = el("div", "guide", el("div", "bar", el("h1", undefined, "Stream Channeler DVR", updated), el("div", "filters", orderSelect, search), el("div", "actions", favorites, reload, close)), content, hbar);
+    const scroller = el("div", "guide", el("div", "bar", el("h1", undefined, "Stream Channeler DVR", updated), el("div", "filters", orderSelect, search), el("div", "actions", favorites, owned, reload, close)), content, hbar);
     root.append(detail, scroller);
     for (const type of ["keydown", "keyup", "keypress"]) {
         host.addEventListener(type, (event) => {
@@ -712,12 +725,14 @@ function createNativeGuide(options) {
         return button;
     }
     // TODO: Validate
-    function renderGuide({ channels, favoriteIds, fetchedAt }) {
+    function renderGuide({ channels, favoriteIds, ownedIds, fetchedAt, }) {
         buttons.clear();
         updated.textContent = `Updated ${slotTime(new Date(fetchedAt))}`;
         const windowStart = windowStartAt(fetchedAt);
         const favoriteSet = new Set(favoriteIds ?? []);
         const favoritesOnly = GM_getValue(FAVORITES_ONLY_KEY, false);
+        const ownedSet = new Set(ownedIds ?? []);
+        const ownedOnly = GM_getValue(OWNED_ONLY_KEY, false);
         const order = GM_getValue(dvr_api/* CHANNEL_ORDER_KEY */.ht, "current");
         orderSelect.value = order;
         const seed = GM_getValue(CHANNEL_SEED_KEY, 0);
@@ -726,6 +741,7 @@ function createNativeGuide(options) {
             : channels;
         const rows = ordered
             .filter((channel) => !favoritesOnly || favoriteSet.has(channel.id))
+            .filter((channel) => !ownedOnly || ownedSet.has(channel.id))
             .filter(matchesSearch)
             .map((channel) => ({ channel, programs: schedule(channel.programs) }))
             .filter((row) => row.programs.length > 0);
@@ -806,8 +822,10 @@ function createNativeGuide(options) {
                 ? "No channels match your search."
                 : favoritesOnly
                     ? "No favorite channels. Sign in on streamchanneler.com to load your favorites."
-                    : "No channels with programs yet.")
-            : grid, !favoritesOnly && loadMore);
+                    : ownedOnly
+                        ? "No channels of your own. Sign in on streamchanneler.com to load your channels."
+                        : "No channels with programs yet.")
+            : grid, !favoritesOnly && !ownedOnly && loadMore);
         content.scrollTop = view.top;
         if (grid)
             grid.scrollLeft = view.left;
@@ -864,6 +882,8 @@ var shared = __webpack_require__("./src/shared.ts");
 const MESSAGE_SOURCE = "stream-channeler-dvr";
 const REOPEN_GUIDE_KEY = "reopenGuideAt";
 const REOPEN_GUIDE_MS = 60000;
+const SETTLE_QUIET_MS = 1000;
+const SETTLE_MAX_MS = 10000;
 const SITE_GUIDE_LINK_CLASS = "scr-site-guide-link";
 const DVR_GUIDE_HEIGHT_VH = 65;
 const DVR_DETAIL_WIDTH_VW = 40;
@@ -975,9 +995,40 @@ function shouldReopenGuide() {
     return reopenAt > 0 && Date.now() - reopenAt < REOPEN_GUIDE_MS;
 }
 // TODO: Validate
+function whenPageSettles(run) {
+    const start = () => {
+        let quietTimer = window.setTimeout(finish, SETTLE_QUIET_MS);
+        const hardTimer = window.setTimeout(finish, SETTLE_MAX_MS);
+        const observer = new MutationObserver(() => {
+            clearTimeout(quietTimer);
+            quietTimer = window.setTimeout(finish, SETTLE_QUIET_MS);
+        });
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+        });
+        function finish() {
+            clearTimeout(quietTimer);
+            clearTimeout(hardTimer);
+            observer.disconnect();
+            run();
+        }
+    };
+    if (document.readyState === "complete") {
+        start();
+    }
+    else {
+        window.addEventListener("load", start, { once: true });
+    }
+}
+// TODO: Validate
 function resumeDvrGuide(log) {
     if (window.top !== window || !shouldReopenGuide())
         return;
+    whenPageSettles(() => {
+        if (isDvrGuideOpen())
+            setDvrGuideOpen(true);
+    });
     if (document.documentElement) {
         mountDvrGuide(log);
         return;
@@ -1065,6 +1116,7 @@ function mountSiteGuideLink(log) {
 /* harmony export */   j_: () => (/* binding */ readGuideCache),
 /* harmony export */   k: () => (/* binding */ fetchPublicChannels),
 /* harmony export */   qK: () => (/* binding */ fetchDvrChannel),
+/* harmony export */   qQ: () => (/* binding */ fetchOwnedChannels),
 /* harmony export */   qZ: () => (/* binding */ writeGuideCache),
 /* harmony export */   ui: () => (/* binding */ fetchChannelEpisodes),
 /* harmony export */   v$: () => (/* binding */ markEpisodeWatched),
@@ -1081,7 +1133,7 @@ const CHANNEL_ORDER_KEY = "guideChannelOrder";
 const PREVIEW_LIMIT = 20;
 const PUBLIC_PAGE_KEY = "guidePublicPage";
 const PUBLIC_PAGE_SIZE = 20;
-const FAVORITES_LIMIT = 1000;
+const CHANNEL_LIST_LIMIT = 1000;
 const WATCHED_KEY = "watchedEpisodes";
 const WATCHED_LIMIT = 2000;
 // TODO: Validate
@@ -1149,7 +1201,7 @@ async function fetchChannelList(scope, offset, limit) {
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("hide_empty", "true");
     const response = JSON.parse(await request("GET", url.href, {
-        auth: scope === "favorites" ? true : "optional",
+        auth: scope === "public" ? "optional" : true,
     }));
     return response.data ?? [];
 }
@@ -1159,7 +1211,11 @@ function fetchPublicChannels(page) {
 }
 // TODO: Validate
 function fetchFavoriteChannels() {
-    return fetchChannelList("favorites", 0, FAVORITES_LIMIT);
+    return fetchChannelList("favorites", 0, CHANNEL_LIST_LIMIT);
+}
+// TODO: Validate
+function fetchOwnedChannels() {
+    return fetchChannelList("owned", 0, CHANNEL_LIST_LIMIT);
 }
 // TODO: Validate
 async function fetchChannel(channelId) {
@@ -1432,8 +1488,7 @@ function initManage() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Adult Swim/matches.cjs");
@@ -1467,8 +1522,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Amazon/matches.cjs");
@@ -1521,8 +1575,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Crunchyroll/matches.cjs");
@@ -1554,8 +1607,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Disney+/matches.cjs");
@@ -1590,8 +1642,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/HBO Max/matches.cjs");
@@ -1630,8 +1681,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/HiDive/matches.cjs");
@@ -1677,8 +1727,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Hulu/matches.cjs");
@@ -1715,8 +1764,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/NHK World/matches.cjs");
@@ -1752,8 +1800,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Netflix/matches.cjs");
@@ -1794,8 +1841,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Paramount+/matches.cjs");
@@ -1830,8 +1876,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Peacock/matches.cjs");
@@ -1870,8 +1915,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Pluto TV/matches.cjs");
@@ -1918,8 +1962,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Roku/matches.cjs");
@@ -1953,8 +1996,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/TMDB/matches.cjs");
@@ -2001,8 +2043,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/Tubi/matches.cjs");
@@ -2039,8 +2080,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _manage_plugin__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/manage_plugin.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/manage/YouTube/matches.cjs");
@@ -2290,8 +2330,7 @@ function initManagePlugin(config) {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Adult Swim/matches.cjs");
@@ -2318,8 +2357,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Amazon/matches.cjs");
@@ -2371,8 +2409,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Crunchyroll/matches.cjs");
@@ -2431,8 +2468,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Disney+/matches.cjs");
@@ -2509,8 +2545,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/HBO Max/matches.cjs");
@@ -2583,8 +2618,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/HiDive/matches.cjs");
@@ -2610,8 +2644,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Hulu/matches.cjs");
@@ -2648,8 +2681,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/NHK World/matches.cjs");
@@ -2696,8 +2728,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Netflix/matches.cjs");
@@ -2862,8 +2893,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Paramount+/matches.cjs");
@@ -2918,8 +2948,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Peacock/matches.cjs");
@@ -2964,8 +2993,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Pluto TV/matches.cjs");
@@ -3036,8 +3064,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Roku/matches.cjs");
@@ -3079,8 +3106,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/Tubi/matches.cjs");
@@ -3124,8 +3150,7 @@ function init() {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   hostnames: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.hostnames),
-/* harmony export */   init: () => (/* binding */ init),
-/* harmony export */   matches: () => (/* reexport safe */ _matches_cjs__WEBPACK_IMPORTED_MODULE_1__.matches)
+/* harmony export */   init: () => (/* binding */ init)
 /* harmony export */ });
 /* harmony import */ var _shared__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/shared.ts");
 /* harmony import */ var _matches_cjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/playback/YouTube/matches.cjs");
@@ -3766,11 +3791,17 @@ function setFakeFullscreen(target, forGuide = false) {
         original: new Map(),
         forGuide,
         observer: new MutationObserver(() => {
-            if (target.parentElement === parent &&
-                target.style.getPropertyValue("position") === "fixed") {
+            if (!state.target.isConnected) {
+                const replacement = locatePlayer();
+                if (!replacement)
+                    return;
+                state.target = replacement;
+            }
+            else if (state.target.parentElement === parent &&
+                state.target.style.getPropertyValue("position") === "fixed") {
                 return;
             }
-            parent = target.parentElement;
+            parent = state.target.parentElement;
             applyFakeFullscreenStyles(state);
         }),
     };
@@ -4181,6 +4212,13 @@ function findSameSizeWrapper(video) {
     return wrapper === video ? (video.parentElement ?? video) : wrapper;
 }
 // TODO: Validate
+function locatePlayer() {
+    if (!guidePlayer)
+        return null;
+    const video = findVideo(guidePlayer.videoSelector);
+    return video ? findPlayer(video, guidePlayer.playerSelectors) : null;
+}
+// TODO: Validate
 function findPlayer(video, playerSelectors) {
     for (const selector of playerSelectors) {
         const player = video.closest(selector);
@@ -4437,6 +4475,7 @@ function watchVideoCompletion(log, videoSelector, setting) {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Lz: () => (/* binding */ loadFavoriteChannels),
 /* harmony export */   YE: () => (/* binding */ startGuideSync),
+/* harmony export */   c_: () => (/* binding */ loadOwnedChannels),
 /* harmony export */   cu: () => (/* binding */ loadChannelEpisodes),
 /* harmony export */   pK: () => (/* binding */ loadMorePublicChannels),
 /* harmony export */   ti: () => (/* binding */ fillChannelNames)
@@ -4846,6 +4885,7 @@ async function syncGuideCache(force = false) {
         channels,
         favoriteIds,
         favoritesUpdatedAt,
+        ownedIds: previous?.ownedIds,
         fetchedAt: Date.now(),
     });
 }
@@ -4881,7 +4921,7 @@ async function guideChannelFromApi(item, watched) {
     };
 }
 // TODO: Validate
-async function addApiChannels(items, favoriteIds) {
+async function addApiChannels(items, update = {}) {
     const known = new Set((0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)()?.channels.map(({ id }) => id) ?? []);
     const watched = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readWatched */ .vj)();
     const loaded = await Promise.allSettled(items
@@ -4896,7 +4936,7 @@ async function addApiChannels(items, favoriteIds) {
             ...cache.channels,
             ...added.filter((channel) => !present.has(channel.id)),
         ],
-        ...(favoriteIds && { favoriteIds, favoritesUpdatedAt: Date.now() }),
+        ...update,
     });
     return added.filter((channel) => channel.programs.length > 0).length;
 }
@@ -4917,7 +4957,15 @@ async function loadMorePublicChannels() {
 // TODO: Validate
 async function loadFavoriteChannels() {
     const items = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchFavoriteChannels */ .NJ)();
-    await addApiChannels(items, items.map(({ id }) => id));
+    await addApiChannels(items, {
+        favoriteIds: items.map(({ id }) => id),
+        favoritesUpdatedAt: Date.now(),
+    });
+}
+// TODO: Validate
+async function loadOwnedChannels() {
+    const items = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchOwnedChannels */ .qQ)();
+    await addApiChannels(items, { ownedIds: items.map(({ id }) => id) });
 }
 // TODO: Validate
 async function fillChannelNames() {
@@ -5050,7 +5098,6 @@ webpackContext.id = "./src/playback sync recursive \\/index\\.ts$";
 
 module.exports = {
   hostnames: ["adultswim.com"],
-  matches: ["https://www.adultswim.com/*"],
 };
 
 
@@ -5061,10 +5108,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["primevideo.com", "amazon.com"],
-  matches: [
-    "https://www.primevideo.com/*",
-    "https://www.amazon.com/gp/video/*",
-  ],
 };
 
 
@@ -5075,7 +5118,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["crunchyroll.com"],
-  matches: ["https://www.crunchyroll.com/*"],
 };
 
 
@@ -5086,7 +5128,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["disneyplus.com"],
-  matches: ["https://www.disneyplus.com/*"],
 };
 
 
@@ -5097,7 +5138,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hbomax.com"],
-  matches: ["https://play.hbomax.com/*", "https://www.hbomax.com/*"],
 };
 
 
@@ -5108,7 +5148,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hidive.com"],
-  matches: ["https://www.hidive.com/*"],
 };
 
 
@@ -5119,7 +5158,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hulu.com"],
-  matches: ["https://www.hulu.com/*"],
 };
 
 
@@ -5130,7 +5168,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["nhk.or.jp"],
-  matches: ["https://www3.nhk.or.jp/nhkworld/*"],
 };
 
 
@@ -5141,7 +5178,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["netflix.com"],
-  matches: ["https://www.netflix.com/*"],
 };
 
 
@@ -5152,7 +5188,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["paramountplus.com"],
-  matches: ["https://www.paramountplus.com/*"],
 };
 
 
@@ -5163,7 +5198,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["peacocktv.com"],
-  matches: ["https://www.peacocktv.com/*"],
 };
 
 
@@ -5174,7 +5208,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["pluto.tv"],
-  matches: ["https://pluto.tv/*"],
 };
 
 
@@ -5185,7 +5218,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["therokuchannel.roku.com"],
-  matches: ["https://therokuchannel.roku.com/*"],
 };
 
 
@@ -5196,7 +5228,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["themoviedb.org"],
-  matches: ["https://www.themoviedb.org/*"],
 };
 
 
@@ -5207,7 +5238,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["tubitv.com"],
-  matches: ["https://tubitv.com/*"],
 };
 
 
@@ -5218,7 +5248,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["youtube.com"],
-  matches: ["https://www.youtube.com/*"],
 };
 
 
@@ -5229,7 +5258,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["adultswim.com"],
-  matches: ["https://www.adultswim.com/videos/*"],
 };
 
 
@@ -5240,7 +5268,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["primevideo.com", "amazon.com"],
-  matches: ["https://www.amazon.com/gp/video/*"],
 };
 
 
@@ -5251,7 +5278,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["crunchyroll.com"],
-  matches: ["https://www.crunchyroll.com/watch/*"],
 };
 
 
@@ -5262,7 +5288,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["disneyplus.com"],
-  matches: ["https://www.disneyplus.com/*/play/*"],
 };
 
 
@@ -5273,10 +5298,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hbomax.com"],
-  matches: [
-    "https://play.hbomax.com/video/watch/*",
-    "https://play.hbomax.com/movie/*",
-  ],
 };
 
 
@@ -5287,10 +5308,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hidive.com"],
-  matches: [
-    "https://www.hidive.com/video/*",
-    "https://www.hidive.com/stream/*",
-  ],
 };
 
 
@@ -5301,7 +5318,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["hulu.com"],
-  matches: ["https://www.hulu.com/watch/*"],
 };
 
 
@@ -5312,7 +5328,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["nhk.or.jp"],
-  matches: ["https://www3.nhk.or.jp/nhkworld/en/shows/*"],
 };
 
 
@@ -5323,9 +5338,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["netflix.com"],
-  // Not just /watch/*: Netflix can bounce a new tab to its "Who's watching?"
-  // profile picker on another page first.
-  matches: ["https://www.netflix.com/*"],
 };
 
 
@@ -5336,10 +5348,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["paramountplus.com"],
-  matches: [
-    "https://www.paramountplus.com/shows/video/*",
-    "https://www.paramountplus.com/movies/video/*",
-  ],
 };
 
 
@@ -5350,8 +5358,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["peacocktv.com"],
-  // Episodes and movies live under /watch/asset/..., and playback under /watch/playback/...
-  matches: ["https://www.peacocktv.com/watch/*"],
 };
 
 
@@ -5362,7 +5368,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["pluto.tv"],
-  matches: ["https://pluto.tv/*/on-demand/*", "https://pluto.tv/*/live-tv/*"],
 };
 
 
@@ -5373,7 +5378,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["therokuchannel.roku.com"],
-  matches: ["https://therokuchannel.roku.com/watch/*"],
 };
 
 
@@ -5384,11 +5388,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["tubitv.com"],
-  matches: [
-    "https://tubitv.com/movies/*",
-    "https://tubitv.com/tv-shows/*",
-    "https://tubitv.com/series/*",
-  ],
 };
 
 
@@ -5399,7 +5398,6 @@ module.exports = {
 
 module.exports = {
   hostnames: ["youtube.com"],
-  matches: ["https://www.youtube.com/watch*"],
 };
 
 
@@ -5737,16 +5735,8 @@ function loadPlugins(ctx) {
     return ctx.keys().map((key) => ctx(key));
 }
 // TODO: Validate
-function matchesPage(patterns) {
-    return patterns.some((pattern) => new RegExp(`^${pattern
-        .split("*")
-        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-        .join(".*")}$`).test(location.href));
-}
-// TODO: Validate
 function findPlugin(plugins) {
-    return plugins.find((p) => p.hostnames.some((h) => location.hostname.includes(h)) &&
-        matchesPage(p.matches));
+    return plugins.find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
 }
 const playbackPlugin = findPlugin(loadPlugins(__webpack_require__("./src/playback sync recursive \\/index\\.ts$")));
 const managePlugin = findPlugin(loadPlugins(__webpack_require__("./src/manage sync recursive \\/index\\.ts$")));
