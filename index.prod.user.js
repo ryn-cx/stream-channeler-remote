@@ -52,7 +52,7 @@
 // @grant         GM_xmlhttpRequest
 // @connect       api.streamchanneler.com
 // @connect       *
-// @run-at        document-end
+// @run-at        document-start
 // ==/UserScript==
 
 /******/ (() => { // webpackBootstrap
@@ -70,7 +70,9 @@ __webpack_require__.d(__webpack_exports__, {
   $S: () => (/* binding */ bridgeDvrPage),
   Vs: () => (/* binding */ isDvrGuideOpen),
   kQ: () => (/* binding */ mountDvrGuide),
+  DE: () => (/* binding */ mountSiteGuideLink),
   Fc: () => (/* binding */ openDvrGuide),
+  s2: () => (/* binding */ resumeDvrGuide),
   $c: () => (/* binding */ storeDvrToken),
   nl: () => (/* binding */ toggleDvrGuide)
 });
@@ -90,6 +92,8 @@ const CHANNEL_SEED_KEY = "guideChannelSeed";
 const CHANNEL_COLUMN_PX = 176;
 const FAVORITES_ONLY_KEY = "guideFavoritesOnly";
 const REFRESH_TIMEOUT_MS = 4000;
+const VIEW_KEY = "guideView";
+const VIEW_SAVE_MS = 250;
 const dataUrls = new Map();
 const GUIDE_CSS = `
 :host { all: initial; }
@@ -287,6 +291,8 @@ a.name:hover, a.name:focus-visible { color: #14b8a6; text-decoration: underline;
   pointer-events: none;
 }
 .message { padding: 48px 16px; text-align: center; color: #a3a3a3; }
+.load-more { display: block; width: 100%; height: 44px; margin-top: 8px; font-size: 15px; }
+.load-more:disabled { cursor: default; opacity: 0.6; }
 `;
 // TODO: Validate
 function el(tag, className, ...children) {
@@ -419,17 +425,37 @@ function createNativeGuide(options) {
     });
     const favorites = el("button", "action", "★ Favorites");
     favorites.type = "button";
+    let favoritesStatus = "idle";
     const styleFavorites = () => {
         const on = GM_getValue(FAVORITES_ONLY_KEY, false);
         favorites.className = on ? "action on" : "action";
         favorites.setAttribute("aria-pressed", String(on));
+        favorites.textContent =
+            favoritesStatus === "loading"
+                ? "★ Loading…"
+                : favoritesStatus === "failed"
+                    ? "★ Favorites (couldn't load)"
+                    : "★ Favorites";
     };
     styleFavorites();
     favorites.addEventListener("click", () => {
-        GM_setValue(FAVORITES_ONLY_KEY, !GM_getValue(FAVORITES_ONLY_KEY, false));
+        const on = !GM_getValue(FAVORITES_ONLY_KEY, false);
+        GM_setValue(FAVORITES_ONLY_KEY, on);
+        favoritesStatus = on ? "loading" : "idle";
         styleFavorites();
         if (cache)
             renderGuide(cache);
+        if (!on)
+            return;
+        (0,site_cache/* loadFavoriteChannels */.Lz)()
+            .then(() => {
+            favoritesStatus = "idle";
+        })
+            .catch((error) => {
+            log.warn("Couldn't load favorite channels:", error);
+            favoritesStatus = "failed";
+        })
+            .finally(styleFavorites);
     });
     const close = el("button", "action", "Close");
     close.type = "button";
@@ -470,13 +496,82 @@ function createNativeGuide(options) {
     pageRight.title = "Later";
     const hThumb = el("div", "hbar-thumb");
     const hTrack = el("div", "hbar-track", hThumb);
-    const hbar = el("div", "hbar", pageLeft, hTrack, pageRight);
+    const pageUp = el("button", "action page", "▲");
+    pageUp.type = "button";
+    pageUp.title = "Previous channels";
+    const pageDown = el("button", "action page", "▼");
+    pageDown.type = "button";
+    pageDown.title = "Next channels";
+    const loadMore = el("button", "action load-more", "Load more channels");
+    loadMore.type = "button";
+    let moreStatus = "idle";
+    // TODO: Validate
+    function styleLoadMore() {
+        loadMore.disabled = moreStatus === "loading" || moreStatus === "done";
+        loadMore.textContent = {
+            idle: "Load more channels",
+            loading: "Loading more channels…",
+            failed: "Couldn't load more channels, retry",
+            done: "No more channels",
+        }[moreStatus];
+    }
+    // TODO: Validate
+    function loadMoreChannels() {
+        if (moreStatus === "loading" || moreStatus === "done")
+            return;
+        moreStatus = "loading";
+        styleLoadMore();
+        updateScrollbar();
+        (0,site_cache/* loadMorePublicChannels */.pK)()
+            .then((added) => {
+            moreStatus = added === null ? "done" : "idle";
+        })
+            .catch((error) => {
+            log.warn("Couldn't load more channels:", error);
+            moreStatus = "failed";
+        })
+            .finally(() => {
+            styleLoadMore();
+            updateScrollbar();
+        });
+    }
+    loadMore.addEventListener("click", loadMoreChannels);
+    const hbar = el("div", "hbar", pageLeft, hTrack, pageRight, pageUp, pageDown);
     hbar.hidden = true;
     let grid = null;
+    let view = GM_getValue(VIEW_KEY, { top: 0, left: 0 });
+    let saveTimer;
+    // TODO: Validate
+    function saveView() {
+        clearTimeout(saveTimer);
+        saveTimer = undefined;
+        GM_setValue(VIEW_KEY, view);
+    }
+    // TODO: Validate
+    function rememberView() {
+        view = { top: content.scrollTop, left: grid?.scrollLeft ?? view.left };
+        clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(saveView, VIEW_SAVE_MS);
+    }
+    window.addEventListener("pagehide", () => {
+        if (saveTimer !== undefined)
+            saveView();
+    });
     // TODO: Validate
     function updateScrollbar() {
         const max = grid ? grid.scrollWidth - grid.clientWidth : 0;
-        hbar.hidden = !grid || max <= 0;
+        const maxTop = content.scrollHeight - content.clientHeight;
+        hbar.hidden = !grid;
+        const atBottom = content.scrollTop >= maxTop - 1;
+        pageUp.disabled = content.scrollTop <= 0;
+        pageDown.disabled =
+            atBottom &&
+                (GM_getValue(FAVORITES_ONLY_KEY, false) ||
+                    moreStatus === "loading" ||
+                    moreStatus === "done");
+        hTrack.style.visibility = max > 0 ? "visible" : "hidden";
+        pageLeft.disabled = max <= 0;
+        pageRight.disabled = max <= 0;
         if (!grid || max <= 0)
             return;
         const trackWidth = hTrack.clientWidth;
@@ -495,6 +590,24 @@ function createNativeGuide(options) {
             behavior: "smooth",
         });
     }
+    // TODO: Validate
+    function pageVertically(direction) {
+        const maxTop = content.scrollHeight - content.clientHeight;
+        if (direction > 0 &&
+            content.scrollTop >= maxTop - 1 &&
+            !GM_getValue(FAVORITES_ONLY_KEY, false)) {
+            loadMoreChannels();
+            return;
+        }
+        content.scrollBy({
+            top: direction * content.clientHeight * 0.8,
+            behavior: "smooth",
+        });
+    }
+    pageUp.addEventListener("click", () => pageVertically(-1));
+    pageDown.addEventListener("click", () => pageVertically(1));
+    content.addEventListener("scroll", updateScrollbar, { passive: true });
+    content.addEventListener("scroll", rememberView, { passive: true });
     pageLeft.addEventListener("click", () => pageBy(-1));
     pageRight.addEventListener("click", () => pageBy(1));
     hTrack.addEventListener("pointerdown", (event) => {
@@ -545,6 +658,7 @@ function createNativeGuide(options) {
     const loadingChannels = new Map();
     const failedChannels = new Map();
     search.addEventListener("input", () => {
+        view = { ...view, top: 0 };
         if (cache)
             renderGuide(cache);
     });
@@ -717,13 +831,17 @@ function createNativeGuide(options) {
         }
         grid = rows.length === 0 ? null : el("div", "grid", inner);
         grid?.addEventListener("scroll", updateScrollbar, { passive: true });
+        grid?.addEventListener("scroll", rememberView, { passive: true });
         content.replaceChildren(!grid
             ? message(search.value.trim()
                 ? "No channels match your search."
                 : favoritesOnly
-                    ? "No favorite channels in the cache. Open your favorites on streamchanneler.com to load them."
+                    ? "No favorite channels. Sign in on streamchanneler.com to load your favorites."
                     : "No channels with programs yet.")
-            : grid);
+            : grid, !favoritesOnly && loadMore);
+        content.scrollTop = view.top;
+        if (grid)
+            grid.scrollLeft = view.left;
         updateScrollbar();
         selection = null;
         if (initial) {
@@ -746,11 +864,13 @@ function createNativeGuide(options) {
             return;
         }
         renderGuide(cache);
+        (0,site_cache/* fillChannelNames */.ti)().catch((error) => log.warn("Couldn't load channel names:", error));
     }
     return {
         setOpen(next) {
-            if (!host.isConnected)
-                document.body.appendChild(host);
+            if (!host.isConnected) {
+                (document.body ?? document.documentElement).appendChild(host);
+            }
             open = next;
             host.style.display = next ? "block" : "none";
             if (next)
@@ -775,6 +895,7 @@ var shared = __webpack_require__("./src/shared.ts");
 const MESSAGE_SOURCE = "stream-channeler-dvr";
 const REOPEN_GUIDE_KEY = "reopenGuideAt";
 const REOPEN_GUIDE_MS = 60000;
+const SITE_GUIDE_LINK_CLASS = "scr-site-guide-link";
 const DVR_GUIDE_HEIGHT_VH = 65;
 const DVR_DETAIL_WIDTH_VW = 40;
 const FRAME_STYLE = `position:fixed;left:0;right:0;bottom:0;width:100vw;height:${DVR_GUIDE_HEIGHT_VH}vh;border:0;border-top:1px solid #303030;z-index:2147483647;background:#0a0a0a;color-scheme:dark;box-shadow:0 -8px 24px rgba(0,0,0,0.6);`;
@@ -880,12 +1001,35 @@ function toggleDvrGuide() {
     setDvrGuideOpen(!isDvrGuideOpen());
 }
 // TODO: Validate
+function shouldReopenGuide() {
+    const reopenAt = GM_getValue(REOPEN_GUIDE_KEY, 0);
+    return reopenAt > 0 && Date.now() - reopenAt < REOPEN_GUIDE_MS;
+}
+// TODO: Validate
+function resumeDvrGuide(log) {
+    if (window.top !== window || !shouldReopenGuide())
+        return;
+    if (document.documentElement) {
+        mountDvrGuide(log);
+        return;
+    }
+    const observer = new MutationObserver(() => {
+        if (!document.documentElement)
+            return;
+        observer.disconnect();
+        mountDvrGuide(log);
+    });
+    observer.observe(document, { childList: true });
+}
+// TODO: Validate
 function mountDvrGuide(log) {
     ensureGuide(log);
-    const reopenAt = GM_getValue(REOPEN_GUIDE_KEY, 0);
-    if (reopenAt && Date.now() - reopenAt < REOPEN_GUIDE_MS) {
+    if (shouldReopenGuide()) {
         GM_deleteValue(REOPEN_GUIDE_KEY);
         setDvrGuideOpen(true);
+    }
+    else if (isDvrGuideOpen()) {
+        (0,shared/* fitFakeFullscreen */._U)();
     }
     if (shortcutAdded)
         return;
@@ -906,6 +1050,29 @@ function openDvrGuide(log) {
     mountDvrGuide(log);
     setDvrGuideOpen(true);
 }
+// TODO: Validate
+function mountSiteGuideLink(log) {
+    if (window.top !== window)
+        return;
+    mountDvrGuide(log);
+    const addLinks = () => {
+        document
+            .querySelectorAll('nav a[href="/about"]')
+            .forEach((about) => {
+            if (about.parentElement?.querySelector(`.${SITE_GUIDE_LINK_CLASS}`)) {
+                return;
+            }
+            const link = (0,shared/* createGuideButton */.j0)(log);
+            link.classList.add(SITE_GUIDE_LINK_CLASS);
+            about.after(link);
+        });
+    };
+    addLinks();
+    new MutationObserver(addLinks).observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+}
 
 
 /***/ },
@@ -916,6 +1083,8 @@ function openDvrGuide(log) {
 "use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   FZ: () => (/* binding */ PREVIEW_LIMIT),
+/* harmony export */   G1: () => (/* binding */ fetchChannel),
+/* harmony export */   NJ: () => (/* binding */ fetchFavoriteChannels),
 /* harmony export */   O6: () => (/* binding */ fetchDataUrl),
 /* harmony export */   WK: () => (/* binding */ nextDvrProgram),
 /* harmony export */   XH: () => (/* binding */ DVR_TOKEN_KEY),
@@ -923,14 +1092,17 @@ function openDvrGuide(log) {
 /* harmony export */   ZG: () => (/* binding */ GUIDE_SYNC_REQUEST_KEY),
 /* harmony export */   hg: () => (/* binding */ requestGuideSync),
 /* harmony export */   ht: () => (/* binding */ CHANNEL_ORDER_KEY),
+/* harmony export */   i5: () => (/* binding */ PUBLIC_PAGE_KEY),
 /* harmony export */   j_: () => (/* binding */ readGuideCache),
+/* harmony export */   k: () => (/* binding */ fetchPublicChannels),
+/* harmony export */   qK: () => (/* binding */ fetchDvrChannel),
 /* harmony export */   qZ: () => (/* binding */ writeGuideCache),
 /* harmony export */   ui: () => (/* binding */ fetchChannelEpisodes),
 /* harmony export */   v$: () => (/* binding */ markEpisodeWatched),
 /* harmony export */   vj: () => (/* binding */ readWatched),
 /* harmony export */   yT: () => (/* binding */ apiAssetUrl)
 /* harmony export */ });
-/* unused harmony export DVR_API_ORIGIN */
+/* unused harmony exports DVR_API_ORIGIN, PUBLIC_PAGE_SIZE */
 // TODO: Validate
 const DVR_API_ORIGIN = "https://api.streamchanneler.com";
 const DVR_TOKEN_KEY = "dvrAccessToken";
@@ -938,17 +1110,21 @@ const GUIDE_CACHE_KEY = "guideCache";
 const GUIDE_SYNC_REQUEST_KEY = "guideSyncRequest";
 const CHANNEL_ORDER_KEY = "guideChannelOrder";
 const PREVIEW_LIMIT = 20;
+const PUBLIC_PAGE_KEY = "guidePublicPage";
+const PUBLIC_PAGE_SIZE = 20;
+const FAVORITES_LIMIT = 1000;
 const WATCHED_KEY = "watchedEpisodes";
 const WATCHED_LIMIT = 2000;
 // TODO: Validate
 function request(method, url, options = {}) {
     const headers = {};
-    if (options.auth) {
-        const token = GM_getValue(DVR_TOKEN_KEY, null);
+    const token = GM_getValue(DVR_TOKEN_KEY, null);
+    if (token && options.auth)
+        headers.Authorization = `Bearer ${token}`;
+    if (options.auth === true) {
         if (!token) {
             return Promise.reject(new Error("Not signed in; open streamchanneler.com to sign in"));
         }
-        headers.Authorization = `Bearer ${token}`;
     }
     if (options.body !== undefined)
         headers["Content-Type"] = "application/json";
@@ -994,7 +1170,39 @@ async function fetchChannelEpisodes(channelId, query) {
             url.searchParams.append(key, String(value));
         }
     }
-    return JSON.parse(await request("GET", url.href, { auth: true }));
+    return JSON.parse(await request("GET", url.href, { auth: "optional" }));
+}
+// TODO: Validate
+async function fetchChannelList(scope, offset, limit) {
+    const url = new URL(apiUrl("/channels"));
+    url.searchParams.set("scope", scope);
+    url.searchParams.set("offset", String(offset));
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("hide_empty", "true");
+    const response = JSON.parse(await request("GET", url.href, {
+        auth: scope === "favorites" ? true : "optional",
+    }));
+    return response.data ?? [];
+}
+// TODO: Validate
+function fetchPublicChannels(page) {
+    return fetchChannelList("public", page * PUBLIC_PAGE_SIZE, PUBLIC_PAGE_SIZE);
+}
+// TODO: Validate
+function fetchFavoriteChannels() {
+    return fetchChannelList("favorites", 0, FAVORITES_LIMIT);
+}
+// TODO: Validate
+async function fetchChannel(channelId) {
+    return JSON.parse(await request("GET", apiUrl(`/channels/${encodeURIComponent(channelId)}`), {
+        auth: "optional",
+    }));
+}
+// TODO: Validate
+async function fetchDvrChannel(channelId, randomSeed) {
+    const url = new URL(apiUrl(`/channels/${encodeURIComponent(channelId)}/dvr`));
+    url.searchParams.set("randomSeed", String(randomSeed));
+    return JSON.parse(await request("GET", url.href, { auth: "optional" }));
 }
 // TODO: Validate
 function readWatched() {
@@ -2976,7 +3184,6 @@ function init() {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   C7: () => (/* binding */ loadState),
 /* harmony export */   HA: () => (/* binding */ SKIP_CREDITS_KEY),
-/* harmony export */   Mq: () => (/* binding */ STATE_KEY),
 /* harmony export */   W_: () => (/* binding */ isRunning),
 /* harmony export */   j8: () => (/* binding */ ALWAYS_SHOW_GUIDE_KEY),
 /* harmony export */   o1: () => (/* binding */ SKIP_INTROS_KEY),
@@ -2984,7 +3191,7 @@ function init() {
 /* harmony export */   tc: () => (/* binding */ CUSTOM_URLS_KEY),
 /* harmony export */   vp: () => (/* binding */ listenForPlayRequests)
 /* harmony export */ });
-/* unused harmony exports emptyState, readSession, writeSession */
+/* unused harmony exports STATE_KEY, emptyState, readSession, writeSession */
 /* harmony import */ var _dvr_api__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/dvr_api.ts");
 // TODO: Validate
 
@@ -3273,33 +3480,9 @@ async function handle(request) {
             state.playerTabId = currentTabId();
             state.stopped = false;
             break;
-        case "remote:start":
-            state.mode = "remote";
-            state.queue = request.queue;
-            state.index = request.index;
-            state.channelPath = request.channelPath;
-            await playCurrent(state);
-            break;
         case "remote:stop":
             state.stopped = true;
             break;
-        case "remote:setIndex":
-            state.index = Math.max(0, Math.min(request.index, state.queue.length));
-            break;
-        case "remote:sync": {
-            if (state.mode !== "remote" || state.channelPath !== request.channelPath)
-                return null;
-            const current = state.queue[state.index];
-            const matched = current
-                ? request.queue.findIndex((item) => current.episodeId
-                    ? item.episodeId === current.episodeId
-                    : item.url === current.url)
-                : -1;
-            state.queue = request.queue;
-            state.index =
-                matched >= 0 ? matched : Math.min(state.index, request.queue.length);
-            break;
-        }
         case "custom:start":
             state.mode = "custom";
             state.queue = request.urls.map((url) => ({ url }));
@@ -3354,11 +3537,12 @@ function send(request) {
 /* harmony export */   _U: () => (/* binding */ fitFakeFullscreen),
 /* harmony export */   h: () => (/* binding */ createLogger),
 /* harmony export */   iq: () => (/* binding */ addMenuCommand),
+/* harmony export */   j0: () => (/* binding */ createGuideButton),
 /* harmony export */   oU: () => (/* binding */ FADE_HIDDEN_STYLE),
 /* harmony export */   xk: () => (/* binding */ waitForElement),
 /* harmony export */   yy: () => (/* binding */ sleep)
 /* harmony export */ });
-/* unused harmony exports waitForQuiet, stopAutoControl, resumeAutoControl, setFakeFullscreen, mountPlayerControls, mountGuideControls, enableDebug, signalPreviousEpisode, signalEpisodeEnded, watchUrlChange, expandPlayer */
+/* unused harmony exports waitForQuiet, stopAutoControl, resumeAutoControl, setFakeFullscreen, mountPlayerControls, enableDebug, signalPreviousEpisode, signalEpisodeEnded, watchUrlChange, expandPlayer */
 /* harmony import */ var _dvr__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/dvr.ts");
 /* harmony import */ var _remote__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/remote.ts");
 // TODO: Validate
@@ -3724,7 +3908,7 @@ function fadeWhenIdle(getElement) {
     });
     // Pointer left the page entirely (no element it moved to).
     document.addEventListener("pointerout", (event) => {
-        if (!event.relatedTarget)
+        if (!event.relatedTarget && event.pointerType === "mouse")
             hide();
     }, { capture: true, passive: true });
     window.addEventListener("blur", hide);
@@ -4282,25 +4466,18 @@ function watchVideoCompletion(log, videoSelector, setting) {
 
 "use strict";
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Lz: () => (/* binding */ loadFavoriteChannels),
 /* harmony export */   YE: () => (/* binding */ startGuideSync),
 /* harmony export */   cu: () => (/* binding */ loadChannelEpisodes),
-/* harmony export */   lX: () => (/* binding */ readChannelQueue)
+/* harmony export */   pK: () => (/* binding */ loadMorePublicChannels),
+/* harmony export */   ti: () => (/* binding */ fillChannelNames)
 /* harmony export */ });
 /* harmony import */ var _dvr_api__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/dvr_api.ts");
 // TODO: Validate
 
 const SYNC_MS = 2000;
-const SEARCH_KEYS = [
-    "sortBy",
-    "filter",
-    "order",
-    "orderPresetId",
-    "totalTitlesCount",
-    "startedTitlesCount",
-    "newTitlesCount",
-    "limit",
-    "randomSeed",
-];
+const PUBLIC_PAGE_ATTEMPTS = 5;
+const namesRequested = new Set();
 let lastRaw;
 let lastClient = null;
 // TODO: Validate
@@ -4358,40 +4535,6 @@ function patchPersistedCache(patch) {
     });
 }
 // TODO: Validate
-function hashKey(queryKey) {
-    return JSON.stringify(queryKey, (_, value) => value !== null && typeof value === "object" && !Array.isArray(value)
-        ? Object.fromEntries(Object.keys(value)
-            .sort()
-            .map((key) => [key, value[key]]))
-        : value);
-}
-// TODO: Validate
-function parseSearchValue(value) {
-    try {
-        return JSON.parse(value);
-    }
-    catch {
-        return value;
-    }
-}
-// TODO: Validate
-function episodesQueryHash(channelId) {
-    const search = new URLSearchParams(location.search);
-    const params = {};
-    for (const key of SEARCH_KEYS) {
-        const value = search.get(key);
-        if (value !== null)
-            params[key] = parseSearchValue(value);
-    }
-    if (params.randomSeed === undefined) {
-        const seed = localStorage.getItem(`episode-seed-${channelId}`);
-        if (seed === null)
-            return null;
-        params.randomSeed = Number(seed);
-    }
-    return hashKey(["episodes", channelId, params]);
-}
-// TODO: Validate
 async function loadClient() {
     const raw = await readPersistedCache();
     if (!raw)
@@ -4411,19 +4554,6 @@ function episodesOf(data) {
     if (!isObject(data) || !Array.isArray(data.episodes))
         return [];
     return data.episodes.filter(isObject);
-}
-// TODO: Validate
-async function readChannelQueue(channelId) {
-    const hash = episodesQueryHash(channelId);
-    if (!hash)
-        return null;
-    const client = await loadClient();
-    const query = client?.clientState.queries.find((candidate) => candidate.queryHash === hash);
-    if (!query?.state.data)
-        return null;
-    return episodesOf(query.state.data).flatMap((episode) => typeof episode.url === "string" && typeof episode.id === "string"
-        ? [{ url: episode.url, episodeId: episode.id }]
-        : []);
 }
 // TODO: Validate
 function text(source, ...keys) {
@@ -4606,13 +4736,22 @@ function favoriteChannelIds(client) {
 // TODO: Validate
 function newerChannels(built, previous) {
     const previousById = new Map(previous.map((channel) => [channel.id, channel]));
-    return built.map((channel) => {
-        const older = previousById.get(channel.id);
-        if (!older)
-            return channel;
-        const chosen = (older.updatedAt ?? 0) > (channel.updatedAt ?? 0) ? older : channel;
-        return { ...chosen, query: channel.query ?? older.query };
-    });
+    const builtIds = new Set(built.map((channel) => channel.id));
+    return [
+        ...built.map((channel) => {
+            const older = previousById.get(channel.id);
+            if (!older)
+                return channel;
+            const chosen = (older.updatedAt ?? 0) > (channel.updatedAt ?? 0) ? older : channel;
+            return {
+                ...chosen,
+                name: chosen.name ?? channel.name ?? older.name,
+                number: chosen.number ?? channel.number ?? older.number,
+                query: channel.query ?? older.query,
+            };
+        }),
+        ...previous.filter((channel) => channel.fromApi && !builtIds.has(channel.id)),
+    ];
 }
 // TODO: Validate
 function defaultQuery(details) {
@@ -4751,6 +4890,100 @@ function startGuideSync() {
     sync();
     window.setInterval(() => sync(), SYNC_MS);
     GM_addValueChangeListener(_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .GUIDE_SYNC_REQUEST_KEY */ .ZG, () => sync(true));
+}
+// TODO: Validate
+async function guideChannelFromApi(item, watched) {
+    const randomSeed = Math.floor(Math.random() * 2 ** 31);
+    const dvr = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchDvrChannel */ .qK)(item.id, randomSeed);
+    const order = defaultQuery(item);
+    return {
+        id: item.id,
+        name: item.custom_name ?? item.name ?? dvr.name,
+        number: item.custom_channel_number ?? dvr.number,
+        query: order ? { ...order, randomSeed } : null,
+        loadedAll: dvr.programs.length < _dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PREVIEW_LIMIT */ .FZ,
+        updatedAt: Date.now(),
+        fromApi: true,
+        programs: withWatched(dvr.programs.map((program) => ({
+            ...program,
+            thumbnail_url: (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(program.thumbnail_url),
+            favicon_url: (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(program.favicon_url),
+        })), watched),
+    };
+}
+// TODO: Validate
+async function addApiChannels(items, favoriteIds) {
+    const known = new Set((0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)()?.channels.map(({ id }) => id) ?? []);
+    const watched = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readWatched */ .vj)();
+    const loaded = await Promise.allSettled(items
+        .filter((item) => !known.has(item.id))
+        .map((item) => guideChannelFromApi(item, watched)));
+    const added = loaded.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+    const cache = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)() ?? { channels: [], fetchedAt: Date.now() };
+    const present = new Set(cache.channels.map(({ id }) => id));
+    (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .writeGuideCache */ .qZ)({
+        ...cache,
+        channels: [
+            ...cache.channels,
+            ...added.filter((channel) => !present.has(channel.id)),
+        ],
+        ...(favoriteIds && { favoriteIds, favoritesUpdatedAt: Date.now() }),
+    });
+    return added.filter((channel) => channel.programs.length > 0).length;
+}
+// TODO: Validate
+async function loadMorePublicChannels() {
+    for (let attempt = 0; attempt < PUBLIC_PAGE_ATTEMPTS; attempt++) {
+        const page = GM_getValue(_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PUBLIC_PAGE_KEY */ .i5, 0);
+        const items = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchPublicChannels */ .k)(page);
+        if (items.length === 0)
+            return null;
+        GM_setValue(_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PUBLIC_PAGE_KEY */ .i5, page + 1);
+        const added = await addApiChannels(items);
+        if (added > 0)
+            return added;
+    }
+    return 0;
+}
+// TODO: Validate
+async function loadFavoriteChannels() {
+    const items = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchFavoriteChannels */ .NJ)();
+    await addApiChannels(items, items.map(({ id }) => id));
+}
+// TODO: Validate
+async function fillChannelNames() {
+    const missing = ((0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)()?.channels ?? []).filter((channel) => !channel.name && !namesRequested.has(channel.id));
+    if (missing.length === 0)
+        return;
+    for (const channel of missing)
+        namesRequested.add(channel.id);
+    const loaded = await Promise.allSettled(missing.map((channel) => (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchChannel */ .G1)(channel.id)));
+    const found = new Map();
+    loaded.forEach((result, index) => {
+        const { id } = missing[index];
+        if (result.status === "fulfilled" && result.value.name) {
+            found.set(id, result.value);
+        }
+        else if (result.status === "rejected") {
+            namesRequested.delete(id);
+        }
+    });
+    const cache = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)();
+    if (!cache || found.size === 0)
+        return;
+    (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .writeGuideCache */ .qZ)({
+        ...cache,
+        channels: cache.channels.map((channel) => {
+            const named = found.get(channel.id);
+            return named && !channel.name
+                ? {
+                    ...channel,
+                    name: named.name,
+                    number: channel.number ?? named.channel_number,
+                }
+                : channel;
+        }),
+    });
 }
 
 
@@ -5280,174 +5513,18 @@ var __webpack_exports__ = {};
 var manage = __webpack_require__("./src/manage.ts");
 // EXTERNAL MODULE: ./src/dvr.ts + 1 modules
 var dvr = __webpack_require__("./src/dvr.ts");
+// EXTERNAL MODULE: ./src/site_cache.ts
+var site_cache = __webpack_require__("./src/site_cache.ts");
 // EXTERNAL MODULE: ./src/remote.ts
 var remote = __webpack_require__("./src/remote.ts");
 // EXTERNAL MODULE: ./src/shared.ts
 var shared = __webpack_require__("./src/shared.ts");
-// EXTERNAL MODULE: ./src/site_cache.ts
-var site_cache = __webpack_require__("./src/site_cache.ts");
-;// ./src/remote_button.ts
-// TODO: Validate
-
-
-
-const log = (0,shared/* createLogger */.h)();
-const CHANNEL_PATH = /^\/channels\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
-const CACHE_POLL_MS = 1000;
-const STOP_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-x-icon lucide-monitor-x"><path d="m14.5 12.5-5-5"/><path d="m9.5 12.5 5-5"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>`;
-const PLAY_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-play-icon lucide-monitor-play"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"/><path d="M12 17v4"/><path d="M8 21h8"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg>`;
-let startIndex = 0;
-let pageQueue = [];
-let pageSignature = null;
-// TODO: Validate
-function parseIcon(markup) {
-    return document.importNode(new DOMParser().parseFromString(markup, "image/svg+xml").documentElement, true);
-}
-// TODO: Validate
-function isThisChannel(state) {
-    return state.mode === "remote" && state.channelPath === location.pathname;
-}
-// TODO: Validate
-function isRunningHere(state) {
-    return isThisChannel(state) && (0,remote/* isRunning */.W_)(state);
-}
-// TODO: Validate
-function promptSetIndex() {
-    const state = (0,remote/* loadState */.C7)();
-    const total = isThisChannel(state) ? state.queue.length : pageQueue.length;
-    const current = isThisChannel(state) ? state.index : startIndex;
-    const input = window.prompt(`Set current episode (1-${total}):`, String(current + 1));
-    if (input === null)
-        return;
-    const parsed = parseInt(input, 10);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > total)
-        return;
-    if (isThisChannel(state)) {
-        void (0,remote/* send */.tN)({ type: "remote:setIndex", index: parsed - 1 });
-    }
-    else {
-        startIndex = parsed - 1;
-        updateButton();
-    }
-}
-// TODO: Validate
-function toggleRemote() {
-    const state = (0,remote/* loadState */.C7)();
-    if (isRunningHere(state)) {
-        void (0,remote/* send */.tN)({ type: "remote:stop" });
-        return;
-    }
-    const queue = isThisChannel(state) ? state.queue : pageQueue;
-    const index = isThisChannel(state) ? state.index : startIndex;
-    if (queue.length === 0) {
-        log.error("The full episode list isn't loaded; click Refresh Episodes on the page");
-        return;
-    }
-    log.log(`Starting at ${index + 1}/${queue.length}`);
-    void (0,remote/* send */.tN)({
-        type: "remote:start",
-        channelPath: location.pathname,
-        queue,
-        index,
-    });
-}
-// TODO: Validate
-function handleButtonClick(event) {
-    const target = event.target;
-    if (target.closest("#remote-control-counter")) {
-        event.preventDefault();
-        promptSetIndex();
-        return;
-    }
-    toggleRemote();
-}
-// TODO: Validate
-function updateButton() {
-    let button = document.getElementById("remote-control-btn");
-    if (!CHANNEL_PATH.test(location.pathname)) {
-        button?.remove();
-        return;
-    }
-    if (!button) {
-        const commentsButton = Array.from(document.querySelectorAll("button")).find((candidate) => candidate.querySelector("svg.lucide-message-square") &&
-            candidate.textContent?.trim() === "Comments");
-        if (!commentsButton?.parentElement)
-            return;
-        button = document.createElement("button");
-        button.id = "remote-control-btn";
-        button.className = commentsButton.className;
-        button.setAttribute("data-slot", "button");
-        button.addEventListener("click", handleButtonClick);
-        commentsButton.after(button);
-    }
-    const state = (0,remote/* loadState */.C7)();
-    const running = isRunningHere(state);
-    const total = isThisChannel(state) ? state.queue.length : pageQueue.length;
-    const index = isThisChannel(state) ? state.index : startIndex;
-    const displayed = Math.min(index + 1, total);
-    const signature = `${running}:${displayed}/${total}`;
-    if (button.dataset.signature === signature)
-        return;
-    button.dataset.signature = signature;
-    const counter = document.createElement("span");
-    counter.id = "remote-control-counter";
-    counter.style.cssText = "cursor:pointer;text-decoration:underline";
-    counter.textContent = `${displayed}/${total}`;
-    button.replaceChildren(parseIcon(running ? STOP_ICON : PLAY_ICON), `${running ? "Stop Remote" : "Start Remote"} (`, counter, ")");
-}
-// TODO: Validate
-async function refreshPageQueue() {
-    const channelId = location.pathname.match(CHANNEL_PATH)?.[1];
-    const queue = channelId ? ((await (0,site_cache/* readChannelQueue */.lX)(channelId)) ?? []) : [];
-    const signature = JSON.stringify([location.pathname, queue]);
-    if (signature === pageSignature)
-        return;
-    pageSignature = signature;
-    pageQueue = queue;
-    syncQueue();
-    updateButton();
-}
-// TODO: Validate
-function syncQueue() {
-    const state = (0,remote/* loadState */.C7)();
-    if (pageQueue.length === 0 || !isThisChannel(state))
-        return;
-    const unchanged = pageQueue.length === state.queue.length &&
-        pageQueue.every((item, i) => item.url === state.queue[i].url &&
-            item.episodeId === state.queue[i].episodeId);
-    if (unchanged)
-        return;
-    log.log("Episode order on the page changed; updating the remote's queue");
-    void (0,remote/* send */.tN)({
-        type: "remote:sync",
-        channelPath: location.pathname,
-        queue: pageQueue,
-    });
-}
-// TODO: Validate
-function initRemoteButton() {
-    GM_addValueChangeListener(remote/* STATE_KEY */.Mq, updateButton);
-    let debounceTimer;
-    new MutationObserver(() => {
-        clearTimeout(debounceTimer);
-        debounceTimer = window.setTimeout(updateButton, 200);
-    }).observe(document.body, { childList: true, subtree: true });
-    window.setInterval(() => {
-        if (document.visibilityState !== "visible")
-            return;
-        void refreshPageQueue();
-        updateButton();
-    }, CACHE_POLL_MS);
-    void refreshPageQueue();
-    updateButton();
-}
-
 ;// ./src/settings_panel.ts
 // TODO: Validate
 
 
 
-const settings_panel_log = (0,shared/* createLogger */.h)();
+const log = (0,shared/* createLogger */.h)();
 const NETFLIX_NAME_KEY = "netflixProfileName";
 const NETFLIX_PIN_KEY = "netflixProfilePin";
 const PANEL_ID = "stream-channeler-remote-settings";
@@ -5661,7 +5738,7 @@ function openSettingsPanel() {
     customLabel.htmlFor = "custom-urls";
     const panel = el("main", undefined, el("header", undefined, el("h1", undefined, "Stream Channeler Remote"), settings_panel_button("Close", close)), el("section", undefined, status, el("div", "row", settings_panel_button("Open guide", () => {
         close();
-        (0,dvr/* openDvrGuide */.Fc)(settings_panel_log);
+        (0,dvr/* openDvrGuide */.Fc)(log);
     }), settings_panel_button("Stop", () => void (0,remote/* send */.tN)({ type: "remote:stop" })))), el("section", undefined, el("h2", undefined, "Playback"), settings_panel_checkbox("Skip intros", remote/* SKIP_INTROS_KEY */.o1), settings_panel_checkbox("Skip credits", remote/* SKIP_CREDITS_KEY */.HA), settings_panel_checkbox("Always show guide button", remote/* ALWAYS_SHOW_GUIDE_KEY */.j8)), el("section", undefined, el("h2", undefined, "Netflix profile"), textField("Profile name", NETFLIX_NAME_KEY), textField("PIN", NETFLIX_PIN_KEY, true)), el("section", undefined, el("h2", undefined, "Custom channel"), customLabel, textarea, el("div", "row", settings_panel_button("Play custom channel", () => {
         const urls = customUrls();
         GM_setValue(remote/* CUSTOM_URLS_KEY */.tc, urls);
@@ -5682,7 +5759,6 @@ function openSettingsPanel() {
 
 ;// ./src/index.ts
 // TODO: Validate
-
 
 
 
@@ -5711,17 +5787,35 @@ if (window.top === window) {
     });
     (0,shared/* addMenuCommand */.iq)("settings", "Settings", openSettingsPanel);
 }
-if (playbackPlugin)
-    playbackPlugin.init();
-if (managePlugin)
-    managePlugin.init();
-if (location.hostname.includes("streamchanneler.com")) {
-    (0,dvr/* storeDvrToken */.$c)();
-    (0,dvr/* bridgeDvrPage */.$S)();
-    (0,site_cache/* startGuideSync */.YE)();
-    initRemoteButton();
-    (0,manage/* initManage */.Ad)();
+// TODO: Validate
+function onDomReady(run) {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", run, { once: true });
+    }
+    else {
+        run();
+    }
 }
+onDomReady(() => {
+    const isApp = typeof STREAM_CHANNELER_APP !== "undefined";
+    const isStreamChanneler = location.hostname.includes("streamchanneler.com");
+    if (playbackPlugin)
+        playbackPlugin.init();
+    if (managePlugin && !isApp)
+        managePlugin.init();
+    if (isStreamChanneler) {
+        (0,dvr/* storeDvrToken */.$c)();
+        (0,dvr/* bridgeDvrPage */.$S)();
+        (0,site_cache/* startGuideSync */.YE)();
+        if (!isApp)
+            (0,manage/* initManage */.Ad)();
+        (0,dvr/* mountSiteGuideLink */.DE)((0,shared/* createLogger */.h)("Guide"));
+        if (window.top === window && location.hash === "#guide") {
+            (0,dvr/* openDvrGuide */.Fc)((0,shared/* createLogger */.h)("Guide"));
+        }
+    }
+});
+(0,dvr/* resumeDvrGuide */.s2)((0,shared/* createLogger */.h)("Guide"));
 
 })();
 
