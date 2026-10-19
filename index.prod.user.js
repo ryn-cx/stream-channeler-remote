@@ -4,8 +4,7 @@
 // @version       0.0.2
 // @author        ryn.cx
 // @description   Companion for Stream Channeler that controls media playback and assists in channel creation.
-// @match         https://streamchanneler.com/channels
-// @match         https://streamchanneler.com/channels/*
+// @match         https://streamchanneler.com/*
 // @match         https://www.adultswim.com/videos/*
 // @match         https://www.amazon.com/gp/video/*
 // @match         https://www.crunchyroll.com/watch/*
@@ -50,12 +49,1246 @@
 // @grant         GM_deleteValue
 // @grant         GM_registerMenuCommand
 // @grant         GM_unregisterMenuCommand
-// @grant         unsafeWindow
-// @run-at        document-end
+// @grant         GM_xmlhttpRequest
+// @connect       api.streamchanneler.com
+// @connect       *
+// @run-at        document-start
 // ==/UserScript==
 
 /******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
+
+/***/ "./src/dvr.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+
+// EXPORTS
+__webpack_require__.d(__webpack_exports__, {
+  We: () => (/* binding */ DVR_DETAIL_WIDTH_VW),
+  de: () => (/* binding */ DVR_GUIDE_HEIGHT_VH),
+  $S: () => (/* binding */ bridgeDvrPage),
+  Vs: () => (/* binding */ isDvrGuideOpen),
+  kQ: () => (/* binding */ mountDvrGuide),
+  DE: () => (/* binding */ mountSiteGuideLink),
+  Fc: () => (/* binding */ openDvrGuide),
+  s2: () => (/* binding */ resumeDvrGuide),
+  $c: () => (/* binding */ storeDvrToken),
+  nl: () => (/* binding */ toggleDvrGuide)
+});
+
+// UNUSED EXPORTS: setDvrGuideOpen
+
+// EXTERNAL MODULE: ./src/dvr_api.ts
+var dvr_api = __webpack_require__("./src/dvr_api.ts");
+// EXTERNAL MODULE: ./src/site_cache.ts
+var site_cache = __webpack_require__("./src/site_cache.ts");
+;// ./src/dvr_native.ts
+// TODO: Validate
+
+
+const PIXELS_PER_MINUTE = 6;
+const CHANNEL_SEED_KEY = "guideChannelSeed";
+const CHANNEL_COLUMN_PX = 176;
+const FAVORITES_ONLY_KEY = "guideFavoritesOnly";
+const REFRESH_TIMEOUT_MS = 4000;
+const VIEW_KEY = "guideView";
+const VIEW_SAVE_MS = 250;
+const dataUrls = new Map();
+const GUIDE_CSS = `
+:host { all: initial; }
+.guide {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a0a;
+  color: #fafafa;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+.guide * { box-sizing: border-box; }
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid #303030;
+}
+.bar h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.bar small { color: #a3a3a3; font-size: 12px; margin-left: 8px; }
+.actions { display: flex; gap: 8px; }
+.action {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #303030;
+  border-radius: 6px;
+  background: #171717;
+  color: #fafafa;
+  font: inherit;
+  cursor: pointer;
+}
+.action:hover { border-color: #14b8a6; }
+.content { flex: 1; min-height: 0; overflow: auto; padding: 8px 16px 16px; }
+.filters { display: flex; flex: 1; gap: 8px; }
+.search, .order {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #303030;
+  border-radius: 6px;
+  background: #171717;
+  color: #fafafa;
+  font: inherit;
+}
+.search { flex: 1; max-width: 320px; }
+.order { cursor: pointer; }
+.search:focus, .order:focus { outline: none; border-color: #14b8a6; }
+.channel-actions { display: flex; gap: 4px; margin-top: 4px; }
+.more {
+  padding: 2px 8px;
+  border: 1px dashed #14b8a6;
+  border-radius: 4px;
+  background: transparent;
+  color: #14b8a6;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.more:hover:not(:disabled), .more:focus-visible { background: #14b8a6; color: #042f2e; outline: none; }
+.more:disabled { cursor: default; opacity: 0.7; }
+
+.action.on { border-color: #14b8a6; background: #14b8a6; color: #042f2e; }
+.star { color: #facc15; }
+.detail {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  overflow: auto;
+  background: #0a0a0a;
+  color: #fafafa;
+  font: 14px/1.4 system-ui, sans-serif;
+  border-right: 1px solid #303030;
+}
+.detail * { box-sizing: border-box; }
+.detail p { margin: 0; color: #a3a3a3; }
+.detail .channel { color: #14b8a6; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.detail .title { color: #fafafa; font-size: 18px; font-weight: 600; }
+.detail .hint { margin: auto; }
+.detail .description { color: #d4d4d4; }
+.detail .top { display: flex; gap: 12px; flex-shrink: 0; }
+.detail .info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.detail .thumb { width: 50%; flex-shrink: 0; align-self: flex-start; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; }
+.grid {
+  overflow-x: auto;
+  scrollbar-width: none;
+  border: 1px solid #303030;
+  border-radius: 6px;
+  background: #171717;
+}
+.grid::-webkit-scrollbar { display: none; }
+.hbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 16px 12px;
+  border-top: 1px solid #303030;
+}
+.hbar[hidden] { display: none; }
+.page { min-width: 56px; font-size: 16px; }
+.page:disabled { cursor: default; opacity: 0.4; }
+.page:disabled:hover { border-color: #303030; }
+.hbar-track {
+  position: relative;
+  flex: 1;
+  height: 20px;
+  border: 1px solid #303030;
+  border-radius: 10px;
+  background: #171717;
+  cursor: pointer;
+}
+.hbar-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 8px;
+  background: #525252;
+  cursor: grab;
+  touch-action: none;
+}
+.hbar-thumb:hover, .hbar-thumb.dragging { background: #14b8a6; }
+.hbar-thumb.dragging { cursor: grabbing; }
+.inner { position: relative; min-width: max-content; }
+.row { display: flex; border-bottom: 1px solid #303030; }
+.row:last-child { border-bottom: 0; }
+.row.current { background: rgba(20, 184, 166, 0.1); border-bottom: 2px solid #14b8a6; }
+.head { background: #1f1f1f; }
+.label {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: ${CHANNEL_COLUMN_PX}px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-right: 1px solid #303030;
+  background: #171717;
+}
+.head .label { background: #262626; font-weight: 600; }
+.number { color: #a3a3a3; font-variant-numeric: tabular-nums; }
+.name { font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+a.name { color: inherit; text-decoration: none; }
+a.name:hover, a.name:focus-visible { color: #14b8a6; text-decoration: underline; outline: none; }
+.tag { display: block; font-size: 12px; color: #14b8a6; }
+.slot {
+  flex-shrink: 0;
+  width: ${30 * PIXELS_PER_MINUTE}px;
+  padding: 8px;
+  border-left: 1px solid #303030;
+  color: #a3a3a3;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.track { position: relative; height: 64px; }
+.program {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  overflow: hidden;
+  padding: 4px 8px;
+  border: 1px solid #303030;
+  border-radius: 4px;
+  background: #222;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.program:hover, .program:focus-visible { background: #14b8a6; color: #042f2e; outline: none; }
+.program.playing { border-color: #14b8a6; background: rgba(20, 184, 166, 0.8); color: #042f2e; }
+.program.selected { border-color: #14b8a6; background: #14b8a6; color: #042f2e; box-shadow: 0 0 0 2px #14b8a6; }
+.program.watched { opacity: 0.6; }
+.program { display: flex; align-items: center; gap: 6px; }
+.program .text { min-width: 0; }
+.program span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.favicon { width: 20px; height: 20px; flex-shrink: 0; object-fit: contain; border-radius: 3px; }
+.detail .source { display: flex; align-items: center; gap: 8px; }
+.detail .source .favicon { width: 20px; height: 20px; max-height: none; margin: 0; object-fit: contain; border-radius: 3px; }
+.program .sub { font-size: 12px; opacity: 0.7; }
+.now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+  width: 1px;
+  background: #ef4444;
+  pointer-events: none;
+}
+.message { padding: 48px 16px; text-align: center; color: #a3a3a3; }
+.load-more { display: block; width: 100%; height: 44px; margin-top: 8px; font-size: 15px; }
+.load-more:disabled { cursor: default; opacity: 0.6; }
+`;
+// TODO: Validate
+function el(tag, className, ...children) {
+    const element = document.createElement(tag);
+    if (className)
+        element.className = className;
+    for (const child of children) {
+        if (child)
+            element.append(child);
+    }
+    return element;
+}
+// TODO: Validate
+function applyStyles(root) {
+    try {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(GUIDE_CSS);
+        root.adoptedStyleSheets = [sheet];
+    }
+    catch {
+        const style = document.createElement("style");
+        style.textContent = GUIDE_CSS;
+        root.prepend(style);
+    }
+}
+// TODO: Validate
+function schedule(programs) {
+    const scheduled = [];
+    let startMinute = 0;
+    for (const program of programs) {
+        const minutes = Math.max(5, Math.round((program.duration ?? 1800) / 60));
+        scheduled.push({ program, startMinute, minutes });
+        startMinute += minutes;
+    }
+    return scheduled;
+}
+// TODO: Validate
+function shuffleRank(seed, id) {
+    let hash = seed >>> 0;
+    for (let index = 0; index < id.length; index++) {
+        hash = Math.imul(hash ^ id.charCodeAt(index), 2654435761);
+        hash ^= hash >>> 15;
+    }
+    return hash >>> 0;
+}
+// TODO: Validate
+function slotTime(date) {
+    return date
+        .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+        .replace(" ", "");
+}
+// TODO: Validate
+function windowStartAt(time) {
+    const start = new Date(time);
+    start.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
+    return start;
+}
+// TODO: Validate
+function formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const padded = (value) => value.toString().padStart(2, "0");
+    return hours > 0
+        ? `${hours}:${padded(minutes)}:${padded(secs)}`
+        : `${minutes}:${padded(secs)}`;
+}
+// TODO: Validate
+function dvr_native_image(url, className) {
+    if (!url || !/^https?:\/\//.test(url))
+        return null;
+    const img = el("img", className);
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    img.loading = "lazy";
+    let retried = false;
+    img.addEventListener("error", () => {
+        if (retried) {
+            img.remove();
+            return;
+        }
+        retried = true;
+        let dataUrl = dataUrls.get(url);
+        if (!dataUrl) {
+            dataUrl = (0,dvr_api/* fetchDataUrl */.O6)(url);
+            dataUrls.set(url, dataUrl);
+        }
+        dataUrl
+            .then((loaded) => {
+            img.src = loaded;
+        })
+            .catch(() => img.remove());
+    });
+    img.src = url;
+    return img;
+}
+// TODO: Validate
+function createNativeGuide(options) {
+    const { log } = options;
+    const host = el("div");
+    host.id = "stream-channeler-dvr-native";
+    host.style.cssText = options.frameStyle + "display:none;";
+    const root = host.attachShadow({ mode: "open" });
+    applyStyles(root);
+    const detail = el("aside", "detail");
+    detail.style.cssText = options.detailStyle;
+    const updated = el("small");
+    const search = el("input", "search");
+    search.type = "search";
+    search.placeholder = "Search channels";
+    search.spellcheck = false;
+    const orderSelect = el("select", "order");
+    orderSelect.title = "Channel order";
+    for (const [value, label] of [
+        ["current", "Current sort"],
+        ["random", "Random"],
+    ]) {
+        const option = el("option", undefined, label);
+        option.value = value;
+        orderSelect.append(option);
+    }
+    orderSelect.value = GM_getValue(dvr_api/* CHANNEL_ORDER_KEY */.ht, "current");
+    orderSelect.addEventListener("change", () => {
+        GM_setValue(dvr_api/* CHANNEL_ORDER_KEY */.ht, orderSelect.value);
+        if (orderSelect.value === "random") {
+            GM_setValue(CHANNEL_SEED_KEY, Math.floor(Math.random() * 2 ** 32));
+        }
+        if (cache)
+            renderGuide(cache);
+    });
+    const favorites = el("button", "action", "★ Favorites");
+    favorites.type = "button";
+    let favoritesStatus = "idle";
+    const styleFavorites = () => {
+        const on = GM_getValue(FAVORITES_ONLY_KEY, false);
+        favorites.className = on ? "action on" : "action";
+        favorites.setAttribute("aria-pressed", String(on));
+        favorites.textContent =
+            favoritesStatus === "loading"
+                ? "★ Loading…"
+                : favoritesStatus === "failed"
+                    ? "★ Favorites (couldn't load)"
+                    : "★ Favorites";
+    };
+    styleFavorites();
+    favorites.addEventListener("click", () => {
+        const on = !GM_getValue(FAVORITES_ONLY_KEY, false);
+        GM_setValue(FAVORITES_ONLY_KEY, on);
+        favoritesStatus = on ? "loading" : "idle";
+        styleFavorites();
+        if (cache)
+            renderGuide(cache);
+        if (!on)
+            return;
+        (0,site_cache/* loadFavoriteChannels */.Lz)()
+            .then(() => {
+            favoritesStatus = "idle";
+        })
+            .catch((error) => {
+            log.warn("Couldn't load favorite channels:", error);
+            favoritesStatus = "failed";
+        })
+            .finally(styleFavorites);
+    });
+    const close = el("button", "action", "Close");
+    close.type = "button";
+    close.addEventListener("click", options.onClose);
+    const reload = el("button", "action", "Refresh");
+    reload.type = "button";
+    let refreshTimer;
+    const finishRefresh = () => {
+        clearTimeout(refreshTimer);
+        reload.disabled = false;
+        reload.textContent = "Refresh";
+    };
+    reload.addEventListener("click", () => {
+        reload.disabled = true;
+        reload.textContent = "Refreshing…";
+        if (location.hostname.includes("streamchanneler.com")) {
+            updated.textContent = "Reading the cache…";
+        }
+        (0,dvr_api/* requestGuideSync */.hg)();
+        clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+            finishRefresh();
+            updated.textContent =
+                "Couldn't refresh: open a streamchanneler.com tab to update the guide";
+        }, REFRESH_TIMEOUT_MS);
+    });
+    GM_addValueChangeListener(dvr_api/* GUIDE_CACHE_KEY */.YE, () => {
+        finishRefresh();
+        if (open)
+            render();
+    });
+    const content = el("div", "content");
+    const pageLeft = el("button", "action page", "◀");
+    pageLeft.type = "button";
+    pageLeft.title = "Earlier";
+    const pageRight = el("button", "action page", "▶");
+    pageRight.type = "button";
+    pageRight.title = "Later";
+    const hThumb = el("div", "hbar-thumb");
+    const hTrack = el("div", "hbar-track", hThumb);
+    const pageUp = el("button", "action page", "▲");
+    pageUp.type = "button";
+    pageUp.title = "Previous channels";
+    const pageDown = el("button", "action page", "▼");
+    pageDown.type = "button";
+    pageDown.title = "Next channels";
+    const loadMore = el("button", "action load-more", "Load more channels");
+    loadMore.type = "button";
+    let moreStatus = "idle";
+    // TODO: Validate
+    function styleLoadMore() {
+        loadMore.disabled = moreStatus === "loading" || moreStatus === "done";
+        loadMore.textContent = {
+            idle: "Load more channels",
+            loading: "Loading more channels…",
+            failed: "Couldn't load more channels, retry",
+            done: "No more channels",
+        }[moreStatus];
+    }
+    // TODO: Validate
+    function loadMoreChannels() {
+        if (moreStatus === "loading" || moreStatus === "done")
+            return;
+        moreStatus = "loading";
+        styleLoadMore();
+        updateScrollbar();
+        (0,site_cache/* loadMorePublicChannels */.pK)()
+            .then((added) => {
+            moreStatus = added === null ? "done" : "idle";
+        })
+            .catch((error) => {
+            log.warn("Couldn't load more channels:", error);
+            moreStatus = "failed";
+        })
+            .finally(() => {
+            styleLoadMore();
+            updateScrollbar();
+        });
+    }
+    loadMore.addEventListener("click", loadMoreChannels);
+    const hbar = el("div", "hbar", pageLeft, hTrack, pageRight, pageUp, pageDown);
+    hbar.hidden = true;
+    let grid = null;
+    let view = GM_getValue(VIEW_KEY, { top: 0, left: 0 });
+    let saveTimer;
+    // TODO: Validate
+    function saveView() {
+        clearTimeout(saveTimer);
+        saveTimer = undefined;
+        GM_setValue(VIEW_KEY, view);
+    }
+    // TODO: Validate
+    function rememberView() {
+        view = { top: content.scrollTop, left: grid?.scrollLeft ?? view.left };
+        clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(saveView, VIEW_SAVE_MS);
+    }
+    window.addEventListener("pagehide", () => {
+        if (saveTimer !== undefined)
+            saveView();
+    });
+    // TODO: Validate
+    function updateScrollbar() {
+        const max = grid ? grid.scrollWidth - grid.clientWidth : 0;
+        const maxTop = content.scrollHeight - content.clientHeight;
+        hbar.hidden = !grid;
+        const atBottom = content.scrollTop >= maxTop - 1;
+        pageUp.disabled = content.scrollTop <= 0;
+        pageDown.disabled =
+            atBottom &&
+                (GM_getValue(FAVORITES_ONLY_KEY, false) ||
+                    moreStatus === "loading" ||
+                    moreStatus === "done");
+        hTrack.style.visibility = max > 0 ? "visible" : "hidden";
+        pageLeft.disabled = max <= 0;
+        pageRight.disabled = max <= 0;
+        if (!grid || max <= 0)
+            return;
+        const trackWidth = hTrack.clientWidth;
+        const thumbWidth = Math.max(40, (grid.clientWidth / grid.scrollWidth) * trackWidth);
+        hThumb.style.width = `${thumbWidth}px`;
+        hThumb.style.left = `${(grid.scrollLeft / max) * (trackWidth - thumbWidth)}px`;
+        pageLeft.disabled = grid.scrollLeft <= 0;
+        pageRight.disabled = grid.scrollLeft >= max - 1;
+    }
+    // TODO: Validate
+    function pageBy(direction) {
+        if (!grid)
+            return;
+        grid.scrollBy({
+            left: direction * (grid.clientWidth - CHANNEL_COLUMN_PX),
+            behavior: "smooth",
+        });
+    }
+    // TODO: Validate
+    function pageVertically(direction) {
+        const maxTop = content.scrollHeight - content.clientHeight;
+        if (direction > 0 &&
+            content.scrollTop >= maxTop - 1 &&
+            !GM_getValue(FAVORITES_ONLY_KEY, false)) {
+            loadMoreChannels();
+            return;
+        }
+        content.scrollBy({
+            top: direction * content.clientHeight * 0.8,
+            behavior: "smooth",
+        });
+    }
+    pageUp.addEventListener("click", () => pageVertically(-1));
+    pageDown.addEventListener("click", () => pageVertically(1));
+    content.addEventListener("scroll", updateScrollbar, { passive: true });
+    content.addEventListener("scroll", rememberView, { passive: true });
+    pageLeft.addEventListener("click", () => pageBy(-1));
+    pageRight.addEventListener("click", () => pageBy(1));
+    hTrack.addEventListener("pointerdown", (event) => {
+        if (event.target === hThumb)
+            return;
+        const thumb = hThumb.getBoundingClientRect();
+        pageBy(event.clientX < thumb.left + thumb.width / 2 ? -1 : 1);
+    });
+    let drag = null;
+    hThumb.addEventListener("pointerdown", (event) => {
+        if (!grid)
+            return;
+        event.preventDefault();
+        hThumb.setPointerCapture(event.pointerId);
+        hThumb.classList.add("dragging");
+        drag = { x: event.clientX, scrollLeft: grid.scrollLeft };
+    });
+    hThumb.addEventListener("pointermove", (event) => {
+        if (!drag || !grid)
+            return;
+        const range = hTrack.clientWidth - hThumb.offsetWidth;
+        if (range <= 0)
+            return;
+        const max = grid.scrollWidth - grid.clientWidth;
+        grid.scrollLeft =
+            drag.scrollLeft + ((event.clientX - drag.x) / range) * max;
+    });
+    for (const type of ["pointerup", "pointercancel"]) {
+        hThumb.addEventListener(type, () => {
+            drag = null;
+            hThumb.classList.remove("dragging");
+        });
+    }
+    new ResizeObserver(updateScrollbar).observe(content);
+    const scroller = el("div", "guide", el("div", "bar", el("h1", undefined, "Stream Channeler DVR", updated), el("div", "filters", orderSelect, search), el("div", "actions", favorites, reload, close)), content, hbar);
+    root.append(detail, scroller);
+    for (const type of ["keydown", "keyup", "keypress"]) {
+        host.addEventListener(type, (event) => {
+            const target = event.composedPath()[0];
+            if (target === search || target === orderSelect)
+                event.stopPropagation();
+        });
+    }
+    let open = false;
+    let selection = null;
+    let cache = null;
+    const buttons = new Map();
+    const loadingChannels = new Map();
+    const failedChannels = new Map();
+    search.addEventListener("input", () => {
+        view = { ...view, top: 0 };
+        if (cache)
+            renderGuide(cache);
+    });
+    // TODO: Validate
+    function message(text) {
+        return el("p", "message", text);
+    }
+    // TODO: Validate
+    function renderDetail(windowStart) {
+        if (!selection) {
+            detail.replaceChildren(el("p", "hint", "Hover over a program to see its details."));
+            return;
+        }
+        const { channel, scheduled } = selection;
+        const { program } = scheduled;
+        const start = new Date(windowStart.getTime() + scheduled.startMinute * 60000);
+        const end = new Date(start.getTime() + scheduled.minutes * 60000);
+        const timing = [
+            `${slotTime(start)} - ${slotTime(end)}`,
+            program.duration ? formatDuration(program.duration) : null,
+        ]
+            .filter(Boolean)
+            .join(" · ");
+        detail.replaceChildren(el("div", "top", dvr_native_image(program.thumbnail_url, "thumb"), el("div", "info", el("p", "channel", channel.name ?? ""), el("p", "title", program.title ?? ""), el("p", undefined, program.subtitle), el("p", undefined, timing), el("p", "source", dvr_native_image(program.favicon_url, "favicon"), program.plugin_key ?? program.source_key))), program.description && el("p", "description", program.description));
+    }
+    // TODO: Validate
+    function styleButton(episodeId) {
+        const playing = options.playing?.episodeId === episodeId;
+        const selected = selection?.scheduled.program.episode_id === episodeId;
+        for (const button of buttons.get(episodeId) ?? []) {
+            button.className = [
+                "program",
+                playing && "playing",
+                selected && "selected",
+                button.dataset.watched === "1" && "watched",
+            ]
+                .filter(Boolean)
+                .join(" ");
+        }
+    }
+    // TODO: Validate
+    function select(next, windowStart) {
+        const previous = selection?.scheduled.program.episode_id;
+        selection = next;
+        if (previous)
+            styleButton(previous);
+        styleButton(next.scheduled.program.episode_id);
+        renderDetail(windowStart);
+    }
+    // TODO: Validate
+    function matchesSearch(channel) {
+        const query = search.value.trim().toLowerCase();
+        if (!query)
+            return true;
+        return [channel.name ?? "", channel.number?.toString() ?? ""].some((value) => value.toLowerCase().includes(query));
+    }
+    // TODO: Validate
+    function channelButton(channel, action) {
+        const label = action === "more" ? "More" : "Refresh";
+        const busy = loadingChannels.has(channel.id);
+        const button = el("button", "more", loadingChannels.get(channel.id) === action
+            ? "Loading…"
+            : failedChannels.get(channel.id) === action
+                ? `${label} failed, retry`
+                : label);
+        button.type = "button";
+        button.disabled = busy;
+        button.title =
+            action === "more"
+                ? "Load the rest of this channel's episodes"
+                : "Reload this channel's episodes";
+        button.addEventListener("click", () => {
+            loadingChannels.set(channel.id, action);
+            failedChannels.delete(channel.id);
+            if (open)
+                render();
+            (0,site_cache/* loadChannelEpisodes */.cu)(channel, action === "more" || (channel.loadedAll ?? false))
+                .catch((error) => {
+                log.warn(`Couldn't load episodes for ${channel.id}:`, error);
+                failedChannels.set(channel.id, action);
+            })
+                .finally(() => {
+                loadingChannels.delete(channel.id);
+                if (open)
+                    render();
+            });
+        });
+        return button;
+    }
+    // TODO: Validate
+    function renderGuide({ channels, favoriteIds, fetchedAt }) {
+        buttons.clear();
+        updated.textContent = `Updated ${slotTime(new Date(fetchedAt))}`;
+        const windowStart = windowStartAt(fetchedAt);
+        const favoriteSet = new Set(favoriteIds ?? []);
+        const favoritesOnly = GM_getValue(FAVORITES_ONLY_KEY, false);
+        const order = GM_getValue(dvr_api/* CHANNEL_ORDER_KEY */.ht, "current");
+        orderSelect.value = order;
+        const seed = GM_getValue(CHANNEL_SEED_KEY, 0);
+        const ordered = order === "random"
+            ? [...channels].sort((a, b) => shuffleRank(seed, a.id) - shuffleRank(seed, b.id))
+            : channels;
+        const rows = ordered
+            .filter((channel) => !favoritesOnly || favoriteSet.has(channel.id))
+            .filter(matchesSearch)
+            .map((channel) => ({ channel, programs: schedule(channel.programs) }))
+            .filter((row) => row.programs.length > 0);
+        const longest = Math.max(240, ...rows.map(({ programs }) => programs.reduce((total, program) => total + program.minutes, 0)));
+        const timelineMinutes = Math.ceil(longest / 30) * 30;
+        const timelineWidth = `${timelineMinutes * PIXELS_PER_MINUTE}px`;
+        const slots = el("div", "row head", el("div", "label", "Channel"));
+        for (let index = 0; index < timelineMinutes / 30; index++) {
+            const slot = new Date(windowStart.getTime() + index * 30 * 60000);
+            slots.append(el("div", "slot", `${slot.getMonth() + 1}/${slot.getDate()} ${slotTime(slot)}`));
+        }
+        const nowLine = el("div", "now");
+        nowLine.style.left = `${CHANNEL_COLUMN_PX +
+            ((Date.now() - windowStart.getTime()) / 60000) * PIXELS_PER_MINUTE}px`;
+        const inner = el("div", "inner", nowLine, slots);
+        let initial = null;
+        // TODO: Validate
+        function channelLink(channel, favorite) {
+            const link = el("a", "name", favorite && el("span", "star", "★ "), channel.name ?? "Untitled channel");
+            link.href = `https://streamchanneler.com/channels/${encodeURIComponent(channel.id)}`;
+            link.title = "Open this channel on Stream Channeler";
+            if (!location.hostname.endsWith("streamchanneler.com")) {
+                link.target = "_blank";
+                link.rel = "noopener";
+            }
+            return link;
+        }
+        // TODO: Validate
+        function channelRow(channel, programs, current) {
+            const track = el("div", "track");
+            track.style.width = timelineWidth;
+            for (const scheduled of programs) {
+                const { program } = scheduled;
+                const button = el("button", "program", dvr_native_image(program.favicon_url, "favicon"), el("div", "text", el("span", undefined, program.title ?? ""), el("span", "sub", program.subtitle)));
+                button.type = "button";
+                button.title = `${program.title ?? ""} — ${program.subtitle}`;
+                button.dataset.watched = program.watched ? "1" : "";
+                button.style.left = `${scheduled.startMinute * PIXELS_PER_MINUTE + 2}px`;
+                button.style.width = `${scheduled.minutes * PIXELS_PER_MINUTE - 4}px`;
+                const choice = { channel, scheduled };
+                button.addEventListener("mouseenter", () => select(choice, windowStart));
+                button.addEventListener("focus", () => select(choice, windowStart));
+                button.addEventListener("click", () => {
+                    if (program.url)
+                        options.onPlay(channel, program);
+                });
+                buttons.set(program.episode_id, [
+                    ...(buttons.get(program.episode_id) ?? []),
+                    button,
+                ]);
+                styleButton(program.episode_id);
+                track.append(button);
+                if (options.playing?.episodeId === program.episode_id)
+                    initial = choice;
+            }
+            const label = el("div", "label", channel.number != null && el("span", "number", String(channel.number)), el("div", undefined, current && el("span", "tag", "Current channel"), channelLink(channel, favoriteSet.has(channel.id)), channel.query &&
+                el("div", "channel-actions", !channel.loadedAll && channelButton(channel, "more"), channelButton(channel, "refresh"))));
+            return el("div", current ? "row current" : "row", label, track);
+        }
+        const currentRow = rows.find(({ channel }) => channel.id === options.playing?.channelId);
+        if (currentRow) {
+            inner.append(channelRow(currentRow.channel, currentRow.programs, true));
+        }
+        for (const { channel, programs } of rows) {
+            inner.append(channelRow(channel, programs, false));
+        }
+        grid = rows.length === 0 ? null : el("div", "grid", inner);
+        grid?.addEventListener("scroll", updateScrollbar, { passive: true });
+        grid?.addEventListener("scroll", rememberView, { passive: true });
+        content.replaceChildren(!grid
+            ? message(search.value.trim()
+                ? "No channels match your search."
+                : favoritesOnly
+                    ? "No favorite channels. Sign in on streamchanneler.com to load your favorites."
+                    : "No channels with programs yet.")
+            : grid, !favoritesOnly && loadMore);
+        content.scrollTop = view.top;
+        if (grid)
+            grid.scrollLeft = view.left;
+        updateScrollbar();
+        selection = null;
+        if (initial) {
+            select(initial, windowStart);
+        }
+        else {
+            renderDetail(windowStart);
+        }
+    }
+    // TODO: Validate
+    function render() {
+        cache = (0,dvr_api/* readGuideCache */.j_)();
+        if (!cache) {
+            log.warn("No guide in the cache yet");
+            updated.textContent = "";
+            detail.replaceChildren();
+            grid = null;
+            updateScrollbar();
+            content.replaceChildren(message("The guide is empty. Open your channels on streamchanneler.com to fill it."));
+            return;
+        }
+        renderGuide(cache);
+        (0,site_cache/* fillChannelNames */.ti)().catch((error) => log.warn("Couldn't load channel names:", error));
+    }
+    return {
+        setOpen(next) {
+            if (!host.isConnected) {
+                (document.body ?? document.documentElement).appendChild(host);
+            }
+            open = next;
+            host.style.display = next ? "block" : "none";
+            if (next)
+                render();
+        },
+        isOpen() {
+            return open;
+        },
+    };
+}
+
+// EXTERNAL MODULE: ./src/remote.ts
+var remote = __webpack_require__("./src/remote.ts");
+// EXTERNAL MODULE: ./src/shared.ts
+var shared = __webpack_require__("./src/shared.ts");
+;// ./src/dvr.ts
+// TODO: Validate
+
+
+
+
+const MESSAGE_SOURCE = "stream-channeler-dvr";
+const REOPEN_GUIDE_KEY = "reopenGuideAt";
+const REOPEN_GUIDE_MS = 60000;
+const SITE_GUIDE_LINK_CLASS = "scr-site-guide-link";
+const DVR_GUIDE_HEIGHT_VH = 65;
+const DVR_DETAIL_WIDTH_VW = 40;
+const FRAME_STYLE = `position:fixed;left:0;right:0;bottom:0;width:100vw;height:${DVR_GUIDE_HEIGHT_VH}vh;border:0;border-top:1px solid #303030;z-index:2147483647;background:#0a0a0a;color-scheme:dark;box-shadow:0 -8px 24px rgba(0,0,0,0.6);`;
+const DETAIL_STYLE = `position:fixed;top:0;left:0;width:${DVR_DETAIL_WIDTH_VW}vw;height:${100 - DVR_GUIDE_HEIGHT_VH}vh;z-index:2147483647;`;
+let guide = null;
+let shortcutAdded = false;
+// TODO: Validate
+function storeDvrToken() {
+    if (window.top !== window)
+        return;
+    if (!location.hostname.includes("streamchanneler.com"))
+        return;
+    const token = localStorage.getItem("access_token");
+    if (token)
+        GM_setValue(dvr_api/* DVR_TOKEN_KEY */.XH, token);
+}
+// TODO: Validate
+function parseProgram(data) {
+    if (typeof data !== "object" || data === null)
+        return null;
+    const message = data;
+    if (message.source !== MESSAGE_SOURCE || message.type !== "play") {
+        return null;
+    }
+    const { channelId, channelName, episodeId, url } = message;
+    if (typeof channelId !== "string" ||
+        typeof episodeId !== "string" ||
+        typeof url !== "string" ||
+        !/^https?:\/\//.test(url)) {
+        return null;
+    }
+    return {
+        channelId,
+        channelName: typeof channelName === "string" ? channelName : "",
+        episodeId,
+        url,
+    };
+}
+// TODO: Validate
+function bridgeDvrPage() {
+    if (window.top !== window)
+        return;
+    document.documentElement.dataset.streamChannelerDvr = "1";
+    window.addEventListener("message", (event) => {
+        if (event.origin !== location.origin)
+            return;
+        const program = parseProgram(event.data);
+        if (program)
+            void (0,remote/* send */.tN)({ type: "dvr:play", program });
+    });
+}
+// TODO: Validate
+function isTyping(target) {
+    return (target instanceof HTMLElement &&
+        (target.isContentEditable ||
+            ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)));
+}
+// TODO: Validate
+function ensureGuide(log) {
+    if (guide)
+        return guide;
+    const state = (0,remote/* loadState */.C7)();
+    guide = createNativeGuide({
+        log,
+        frameStyle: FRAME_STYLE,
+        detailStyle: DETAIL_STYLE,
+        playing: state.mode === "dvr" && state.dvr
+            ? { channelId: state.dvr.channelId, episodeId: state.dvr.episodeId }
+            : null,
+        onPlay: (channel, program) => {
+            if (!program.url)
+                return;
+            GM_setValue(REOPEN_GUIDE_KEY, Date.now());
+            void (0,remote/* send */.tN)({
+                type: "dvr:play",
+                program: {
+                    channelId: channel.id,
+                    channelName: channel.name ?? "",
+                    episodeId: program.episode_id,
+                    url: program.url,
+                },
+            });
+        },
+        onClose: () => setDvrGuideOpen(false),
+    });
+    return guide;
+}
+// TODO: Validate
+function isDvrGuideOpen() {
+    return guide?.isOpen() ?? false;
+}
+// TODO: Validate
+function setDvrGuideOpen(open) {
+    if (!guide)
+        return;
+    guide.setOpen(open);
+    (0,shared/* fitFakeFullscreen */._U)();
+    if (!open)
+        window.focus();
+}
+// TODO: Validate
+function toggleDvrGuide() {
+    setDvrGuideOpen(!isDvrGuideOpen());
+}
+// TODO: Validate
+function shouldReopenGuide() {
+    const reopenAt = GM_getValue(REOPEN_GUIDE_KEY, 0);
+    return reopenAt > 0 && Date.now() - reopenAt < REOPEN_GUIDE_MS;
+}
+// TODO: Validate
+function resumeDvrGuide(log) {
+    if (window.top !== window || !shouldReopenGuide())
+        return;
+    if (document.documentElement) {
+        mountDvrGuide(log);
+        return;
+    }
+    const observer = new MutationObserver(() => {
+        if (!document.documentElement)
+            return;
+        observer.disconnect();
+        mountDvrGuide(log);
+    });
+    observer.observe(document, { childList: true });
+}
+// TODO: Validate
+function mountDvrGuide(log) {
+    ensureGuide(log);
+    if (shouldReopenGuide()) {
+        GM_deleteValue(REOPEN_GUIDE_KEY);
+        setDvrGuideOpen(true);
+    }
+    else if (isDvrGuideOpen()) {
+        (0,shared/* fitFakeFullscreen */._U)();
+    }
+    if (shortcutAdded)
+        return;
+    shortcutAdded = true;
+    window.addEventListener("keydown", (event) => {
+        if (isTyping(event.composedPath()[0] ?? event.target))
+            return;
+        if (event.key.toLowerCase() === "g" ||
+            (isDvrGuideOpen() && event.key === "Escape")) {
+            event.stopPropagation();
+            toggleDvrGuide();
+        }
+    }, true);
+    log.debug("Guide overlay ready");
+}
+// TODO: Validate
+function openDvrGuide(log) {
+    mountDvrGuide(log);
+    setDvrGuideOpen(true);
+}
+// TODO: Validate
+function mountSiteGuideLink(log) {
+    if (window.top !== window)
+        return;
+    mountDvrGuide(log);
+    const addLinks = () => {
+        document
+            .querySelectorAll('nav a[href="/about"]')
+            .forEach((about) => {
+            if (about.parentElement?.querySelector(`.${SITE_GUIDE_LINK_CLASS}`)) {
+                return;
+            }
+            const link = (0,shared/* createGuideButton */.j0)(log);
+            link.classList.add(SITE_GUIDE_LINK_CLASS);
+            about.after(link);
+        });
+    };
+    addLinks();
+    new MutationObserver(addLinks).observe(document.body, {
+        childList: true,
+        subtree: true,
+    });
+}
+
+
+/***/ },
+
+/***/ "./src/dvr_api.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   FZ: () => (/* binding */ PREVIEW_LIMIT),
+/* harmony export */   G1: () => (/* binding */ fetchChannel),
+/* harmony export */   NJ: () => (/* binding */ fetchFavoriteChannels),
+/* harmony export */   O6: () => (/* binding */ fetchDataUrl),
+/* harmony export */   WK: () => (/* binding */ nextDvrProgram),
+/* harmony export */   XH: () => (/* binding */ DVR_TOKEN_KEY),
+/* harmony export */   YE: () => (/* binding */ GUIDE_CACHE_KEY),
+/* harmony export */   ZG: () => (/* binding */ GUIDE_SYNC_REQUEST_KEY),
+/* harmony export */   hg: () => (/* binding */ requestGuideSync),
+/* harmony export */   ht: () => (/* binding */ CHANNEL_ORDER_KEY),
+/* harmony export */   i5: () => (/* binding */ PUBLIC_PAGE_KEY),
+/* harmony export */   j_: () => (/* binding */ readGuideCache),
+/* harmony export */   k: () => (/* binding */ fetchPublicChannels),
+/* harmony export */   qK: () => (/* binding */ fetchDvrChannel),
+/* harmony export */   qZ: () => (/* binding */ writeGuideCache),
+/* harmony export */   ui: () => (/* binding */ fetchChannelEpisodes),
+/* harmony export */   v$: () => (/* binding */ markEpisodeWatched),
+/* harmony export */   vj: () => (/* binding */ readWatched),
+/* harmony export */   yT: () => (/* binding */ apiAssetUrl)
+/* harmony export */ });
+/* unused harmony exports DVR_API_ORIGIN, PUBLIC_PAGE_SIZE */
+// TODO: Validate
+const DVR_API_ORIGIN = "https://api.streamchanneler.com";
+const DVR_TOKEN_KEY = "dvrAccessToken";
+const GUIDE_CACHE_KEY = "guideCache";
+const GUIDE_SYNC_REQUEST_KEY = "guideSyncRequest";
+const CHANNEL_ORDER_KEY = "guideChannelOrder";
+const PREVIEW_LIMIT = 20;
+const PUBLIC_PAGE_KEY = "guidePublicPage";
+const PUBLIC_PAGE_SIZE = 20;
+const FAVORITES_LIMIT = 1000;
+const WATCHED_KEY = "watchedEpisodes";
+const WATCHED_LIMIT = 2000;
+// TODO: Validate
+function request(method, url, options = {}) {
+    const headers = {};
+    const token = GM_getValue(DVR_TOKEN_KEY, null);
+    if (token && options.auth)
+        headers.Authorization = `Bearer ${token}`;
+    if (options.auth === true) {
+        if (!token) {
+            return Promise.reject(new Error("Not signed in; open streamchanneler.com to sign in"));
+        }
+    }
+    if (options.body !== undefined)
+        headers["Content-Type"] = "application/json";
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method,
+            url,
+            headers,
+            data: options.body === undefined ? undefined : JSON.stringify(options.body),
+            timeout: 30000,
+            onload: (response) => {
+                if (response.status >= 200 && response.status < 300) {
+                    resolve(response.responseText);
+                }
+                else {
+                    reject(new Error(`${method} ${url} failed: ${response.status}`));
+                }
+            },
+            onerror: () => reject(new Error(`${method} ${url} failed`)),
+            ontimeout: () => reject(new Error(`${method} ${url} timed out`)),
+        });
+    });
+}
+// TODO: Validate
+function apiUrl(path) {
+    return new URL(`/api/v1${path}`, DVR_API_ORIGIN).href;
+}
+// TODO: Validate
+async function fetchChannelEpisodes(channelId, query) {
+    const url = new URL(apiUrl(`/channels/${encodeURIComponent(channelId)}/episodes`));
+    for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === null)
+            continue;
+        if (key === "sortBy" && Array.isArray(value)) {
+            for (const sort of value) {
+                url.searchParams.append(key, typeof sort === "string" ? sort : JSON.stringify(sort));
+            }
+        }
+        else if (typeof value === "object") {
+            url.searchParams.append(key, JSON.stringify(value));
+        }
+        else {
+            url.searchParams.append(key, String(value));
+        }
+    }
+    return JSON.parse(await request("GET", url.href, { auth: "optional" }));
+}
+// TODO: Validate
+async function fetchChannelList(scope, offset, limit) {
+    const url = new URL(apiUrl("/channels"));
+    url.searchParams.set("scope", scope);
+    url.searchParams.set("offset", String(offset));
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("hide_empty", "true");
+    const response = JSON.parse(await request("GET", url.href, {
+        auth: scope === "favorites" ? true : "optional",
+    }));
+    return response.data ?? [];
+}
+// TODO: Validate
+function fetchPublicChannels(page) {
+    return fetchChannelList("public", page * PUBLIC_PAGE_SIZE, PUBLIC_PAGE_SIZE);
+}
+// TODO: Validate
+function fetchFavoriteChannels() {
+    return fetchChannelList("favorites", 0, FAVORITES_LIMIT);
+}
+// TODO: Validate
+async function fetchChannel(channelId) {
+    return JSON.parse(await request("GET", apiUrl(`/channels/${encodeURIComponent(channelId)}`), {
+        auth: "optional",
+    }));
+}
+// TODO: Validate
+async function fetchDvrChannel(channelId, randomSeed) {
+    const url = new URL(apiUrl(`/channels/${encodeURIComponent(channelId)}/dvr`));
+    url.searchParams.set("randomSeed", String(randomSeed));
+    return JSON.parse(await request("GET", url.href, { auth: "optional" }));
+}
+// TODO: Validate
+function readWatched() {
+    return GM_getValue(WATCHED_KEY, {});
+}
+// TODO: Validate
+function rememberWatched(episodeId) {
+    const watched = Object.entries({
+        ...readWatched(),
+        [episodeId]: Date.now(),
+    })
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, WATCHED_LIMIT);
+    GM_setValue(WATCHED_KEY, Object.fromEntries(watched));
+    const cache = readGuideCache();
+    if (!cache)
+        return;
+    let changed = false;
+    for (const channel of cache.channels) {
+        for (const program of channel.programs) {
+            if (program.episode_id !== episodeId || program.watched)
+                continue;
+            program.watched = true;
+            changed = true;
+        }
+    }
+    if (changed)
+        writeGuideCache(cache);
+}
+// TODO: Validate
+async function markEpisodeWatched(episodeId) {
+    rememberWatched(episodeId);
+    await request("POST", apiUrl(`/episodes/${encodeURIComponent(episodeId)}/watches`), {
+        auth: true,
+        body: { watch_date: new Date().toISOString(), completed: false },
+    }).catch(() => undefined);
+}
+// TODO: Validate
+function apiAssetUrl(url) {
+    return url ? new URL(url, DVR_API_ORIGIN).href : null;
+}
+// TODO: Validate
+function fetchDataUrl(url) {
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: "GET",
+            url,
+            responseType: "blob",
+            timeout: 30000,
+            onload: (response) => {
+                if (response.status < 200 || response.status >= 300) {
+                    reject(new Error(`GET ${url} failed: ${response.status}`));
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = () => reject(new Error(`Couldn't read ${url}`));
+                reader.readAsDataURL(response.response);
+            },
+            onerror: () => reject(new Error(`GET ${url} failed`)),
+            ontimeout: () => reject(new Error(`GET ${url} timed out`)),
+        });
+    });
+}
+// TODO: Validate
+function nextDvrProgram(channel, afterEpisodeId) {
+    const index = channel.programs.findIndex((program) => program.episode_id === afterEpisodeId);
+    return (channel.programs
+        .slice(index + 1)
+        .find((program) => program.episode_id !== afterEpisodeId && program.url) ?? null);
+}
+// TODO: Validate
+function readGuideCache() {
+    return GM_getValue(GUIDE_CACHE_KEY, null);
+}
+// TODO: Validate
+function writeGuideCache(cache) {
+    GM_setValue(GUIDE_CACHE_KEY, cache);
+}
+// TODO: Validate
+function requestGuideSync() {
+    GM_setValue(GUIDE_SYNC_REQUEST_KEY, Date.now());
+}
+
+
+/***/ },
 
 /***/ "./src/manage.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
@@ -1182,7 +2415,14 @@ const skipIntro = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .
 // TODO: Validate
 const skipCredits = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .clickWhenShown */ .IP)('button[aria-label="Skip Credits"]:not([aria-hidden="true"])');
 // TODO: Validate
+function fitPlayerToWrapper() {
+    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .waitForElement */ .xk)(".video-player-wrapper", 60000)
+        .then((wrapper) => wrapper.style.setProperty("grid-template-rows", "minmax(0, 1fr)", "important"))
+        .catch(() => { });
+}
+// TODO: Validate
 function init() {
+    fitPlayerToWrapper();
     const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
     if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
         (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
@@ -1269,6 +2509,7 @@ function init() {
     if ((0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipCredits */ .Xd)()) {
         (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
             name: "Disney+",
+            playerToFullscreen: [".btm-media-player"],
             // Detect the end of a series or the end of a movie.
             endSelector: '[data-testid="explore-post-play-view"]',
             isEnded: isEndCardCloseShown,
@@ -1280,6 +2521,7 @@ function init() {
     else {
         (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .initVideoPlugin */ .TD)({
             name: "Disney+",
+            playerToFullscreen: [".btm-media-player"],
             clickButtons: [...introButtons, closeEndCard],
             // The URL eventually changes, but there may be a small delay and some credits are
             // actually skipped.
@@ -1496,7 +2738,7 @@ __webpack_require__.r(__webpack_exports__);
 
 const log = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .createLogger */ .h)("Netflix");
 // The profile to pick on Netflix's "Who's watching?" screen, and its PIN if the
-// profile is locked. Set from the userscript manager's menu.
+// profile is locked.
 const PROFILE_NAME_KEY = "netflixProfileName";
 const PROFILE_PIN_KEY = "netflixProfilePin";
 // From Netflix's stylesheet: the "Who's watching?" gate lists profiles as
@@ -1519,19 +2761,6 @@ const PIN_INPUT_SELECTOR = [
     'input[type="tel"]',
     'input[maxlength="1"]',
 ].join(", ");
-// TODO: Validate
-function registerSettingsMenu() {
-    (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .addMenuCommand */ .iq)("settings", "Set Netflix profile", () => {
-        const name = window.prompt("Netflix profile to select automatically (leave empty to disable):", GM_getValue(PROFILE_NAME_KEY, ""));
-        if (name === null)
-            return;
-        GM_setValue(PROFILE_NAME_KEY, name.trim());
-        const pin = window.prompt("4-digit PIN for that profile (leave empty if it has no PIN):", GM_getValue(PROFILE_PIN_KEY, ""));
-        if (pin === null)
-            return;
-        GM_setValue(PROFILE_PIN_KEY, pin.trim());
-    });
-}
 // Type a value into a React-controlled input: set it through the native setter
 // (so React notices the change) and fire the events Netflix listens for.
 function typeInto(input, value) {
@@ -1606,12 +2835,10 @@ async function getPastProfileGate() {
     await (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .sleep */ .yy)(1000);
     if (isWatchPage())
         return;
-    const target = GM_getValue("loadingUrl", null);
+    const target = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .currentTabStatus */ .J9)()?.url;
     if (!target)
         return;
     log.log("Returning to", target, "after choosing the profile");
-    // The reload runs the plugin again, so let it claim the tab.
-    GM_setValue("loadingTab", true);
     location.assign(target);
     // Never resolve, so the URL watcher doesn't start on the way out.
     await new Promise(() => { });
@@ -1633,10 +2860,11 @@ const player = {
 };
 // TODO: Validate
 function init() {
-    registerSettingsMenu();
     if (!isWatchPage()) {
-        if (GM_getValue("loadingTab", false))
-            void getPastProfileGate();
+        void (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .isControlledTab */ .OR)().then((controlled) => {
+            if (controlled)
+                void getPastProfileGate();
+        });
         return;
     }
     const introButtons = (0,_shared__WEBPACK_IMPORTED_MODULE_0__/* .shouldSkipIntros */ ._3)() ? [skipIntro] : [];
@@ -1949,6 +3177,351 @@ function init() {
 
 /***/ },
 
+/***/ "./src/remote.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   C7: () => (/* binding */ loadState),
+/* harmony export */   HA: () => (/* binding */ SKIP_CREDITS_KEY),
+/* harmony export */   W_: () => (/* binding */ isRunning),
+/* harmony export */   j8: () => (/* binding */ ALWAYS_SHOW_GUIDE_KEY),
+/* harmony export */   o1: () => (/* binding */ SKIP_INTROS_KEY),
+/* harmony export */   tN: () => (/* binding */ send),
+/* harmony export */   tc: () => (/* binding */ CUSTOM_URLS_KEY),
+/* harmony export */   vp: () => (/* binding */ listenForPlayRequests)
+/* harmony export */ });
+/* unused harmony exports STATE_KEY, emptyState, readSession, writeSession */
+/* harmony import */ var _dvr_api__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/dvr_api.ts");
+// TODO: Validate
+
+const STATE_KEY = "remoteState";
+const SKIP_INTROS_KEY = "skipIntros";
+const SKIP_CREDITS_KEY = "skipCredits";
+const ALWAYS_SHOW_GUIDE_KEY = "alwaysShowGuide";
+const CUSTOM_URLS_KEY = "customChannelUrls";
+const HANDOFF_KEY = "tabHandoff";
+const PLAYER_TAB_KEY = "playerTab";
+const PLAY_REQUEST_KEY = "playRequest";
+const PLAY_ACCEPTED_KEY = "playRequestAccepted";
+const TAB_ID_KEY = "streamChannelerRemoteTabId";
+const HISTORY_LIMIT = 50;
+const HANDOFF_MS = 60000;
+const PLAYER_ALIVE_MS = 10000;
+const PLAYER_RESPONSE_MS = 3000;
+const LOG_PREFIX = "[Stream Channeler Remote]";
+let tabId = null;
+let afterSave = [];
+// TODO: Validate
+function emptyState() {
+    return {
+        mode: null,
+        stopped: true,
+        playerTabId: null,
+        queue: [],
+        index: 0,
+        channelPath: null,
+        dvr: null,
+        history: [],
+        openPending: false,
+        navigatedAt: 0,
+    };
+}
+// TODO: Validate
+function loadState() {
+    return {
+        ...emptyState(),
+        ...GM_getValue(STATE_KEY, null),
+    };
+}
+// TODO: Validate
+function saveState(state) {
+    GM_setValue(STATE_KEY, state);
+}
+// TODO: Validate
+function readSession(key) {
+    try {
+        const raw = sessionStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+    }
+    catch {
+        return null;
+    }
+}
+// TODO: Validate
+function writeSession(key, value) {
+    try {
+        if (value === null) {
+            sessionStorage.removeItem(key);
+        }
+        else {
+            sessionStorage.setItem(key, JSON.stringify(value));
+        }
+    }
+    catch {
+        return;
+    }
+}
+// TODO: Validate
+function currentTabId() {
+    tabId ?? (tabId = readSession(TAB_ID_KEY));
+    if (!tabId) {
+        tabId = crypto.randomUUID();
+        writeSession(TAB_ID_KEY, tabId);
+    }
+    return tabId;
+}
+// TODO: Validate
+function claimHandoff() {
+    if (window.top !== window)
+        return;
+    const handoff = GM_getValue(HANDOFF_KEY, null);
+    if (!handoff || Date.now() - handoff.at > HANDOFF_MS)
+        return;
+    GM_deleteValue(HANDOFF_KEY);
+    tabId = handoff.id;
+    writeSession(TAB_ID_KEY, tabId);
+}
+// TODO: Validate
+function goHere(id, url) {
+    const handoff = { id, at: Date.now() };
+    GM_setValue(HANDOFF_KEY, handoff);
+    console.log(LOG_PREFIX, "Playing in this tab:", url);
+    location.assign(url);
+}
+// TODO: Validate
+function openPlayerTab(id, url) {
+    const handoff = { id, at: Date.now() };
+    GM_setValue(HANDOFF_KEY, handoff);
+    console.log(LOG_PREFIX, "Opening a player tab:", url);
+    window.open(url, "_blank");
+}
+// TODO: Validate
+function isPlayerAlive(state) {
+    const player = GM_getValue(PLAYER_TAB_KEY, null);
+    return (player !== null &&
+        player.id === state.playerTabId &&
+        Date.now() - player.seen < PLAYER_ALIVE_MS);
+}
+// TODO: Validate
+function isRunning(state) {
+    return (state.mode !== null &&
+        !state.stopped &&
+        (isPlayerAlive(state) || Date.now() - state.navigatedAt < HANDOFF_MS));
+}
+// TODO: Validate
+function requestPlayerTab(url) {
+    const request = { url, at: Date.now() };
+    GM_setValue(PLAY_REQUEST_KEY, request);
+    window.setTimeout(() => {
+        if (GM_getValue(PLAY_ACCEPTED_KEY, 0) === request.at)
+            return;
+        console.warn(LOG_PREFIX, "The player tab didn't respond; opening a new one");
+        const state = loadState();
+        const id = crypto.randomUUID();
+        state.playerTabId = id;
+        state.navigatedAt = Date.now();
+        saveState(state);
+        openPlayerTab(id, url);
+    }, PLAYER_RESPONSE_MS);
+}
+// TODO: Validate
+function navigate(state, url) {
+    state.openPending = true;
+    state.navigatedAt = Date.now();
+    if (state.playerTabId === currentTabId()) {
+        const id = state.playerTabId;
+        afterSave.push(() => goHere(id, url));
+        return;
+    }
+    if (isPlayerAlive(state)) {
+        afterSave.push(() => requestPlayerTab(url));
+        return;
+    }
+    const id = crypto.randomUUID();
+    state.playerTabId = id;
+    afterSave.push(() => openPlayerTab(id, url));
+}
+// TODO: Validate
+function listenForPlayRequests() {
+    const beat = () => {
+        if (loadState().playerTabId !== currentTabId())
+            return;
+        const player = { id: currentTabId(), seen: Date.now() };
+        GM_setValue(PLAYER_TAB_KEY, player);
+    };
+    beat();
+    window.setInterval(beat, PLAYER_ALIVE_MS / 2);
+    GM_addValueChangeListener(PLAY_REQUEST_KEY, (_name, _old, value) => {
+        const request = value;
+        if (!request)
+            return;
+        if (GM_getValue(PLAYER_TAB_KEY, null)?.id !== currentTabId()) {
+            return;
+        }
+        if (loadState().playerTabId !== currentTabId())
+            return;
+        GM_setValue(PLAY_ACCEPTED_KEY, request.at);
+        goHere(currentTabId(), request.url);
+    });
+}
+// TODO: Validate
+async function playCurrent(state) {
+    const item = state.queue[state.index];
+    if (!item) {
+        state.stopped = true;
+        return;
+    }
+    state.stopped = false;
+    if (item.episodeId) {
+        const marking = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .markEpisodeWatched */ .v$)(item.episodeId);
+        if (state.playerTabId === currentTabId())
+            await marking;
+    }
+    navigate(state, item.url);
+}
+// TODO: Validate
+function toDvrProgram(channel, program) {
+    if (!program.url)
+        return null;
+    return {
+        channelId: channel.id,
+        channelName: channel.name ?? "",
+        episodeId: program.episode_id,
+        url: program.url,
+    };
+}
+// TODO: Validate
+function playDvr(state, program, history) {
+    state.mode = "dvr";
+    state.stopped = false;
+    state.dvr = program;
+    state.history = history.slice(-HISTORY_LIMIT);
+    navigate(state, program.url);
+}
+// TODO: Validate
+async function playNextDvr(state) {
+    const playing = state.dvr;
+    if (!playing)
+        return;
+    const channel = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)()?.channels.find((candidate) => candidate.id === playing.channelId);
+    const next = channel ? (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .nextDvrProgram */ .WK)(channel, playing.episodeId) : null;
+    const program = channel && next ? toDvrProgram(channel, next) : null;
+    if (!program || !next) {
+        state.stopped = true;
+        return;
+    }
+    await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .markEpisodeWatched */ .v$)(next.episode_id);
+    playDvr(state, program, [...state.history, program]);
+}
+// TODO: Validate
+function playPreviousDvr(state) {
+    if (state.history.length < 2)
+        return;
+    const earlier = state.history.slice(0, -1);
+    playDvr(state, earlier[earlier.length - 1], earlier);
+}
+// TODO: Validate
+function statusFor(state) {
+    const controlled = state.playerTabId === currentTabId() && state.mode !== null;
+    return {
+        controlled,
+        stopped: controlled ? state.stopped : true,
+        mode: state.mode,
+        url: state.mode === "dvr"
+            ? (state.dvr?.url ?? null)
+            : (state.queue[state.index]?.url ?? null),
+        dvr: state.dvr,
+    };
+}
+// TODO: Validate
+async function handle(request) {
+    if (request.type === "tab:hello")
+        claimHandoff();
+    const state = loadState();
+    const isPlayer = state.playerTabId === currentTabId();
+    switch (request.type) {
+        case "tab:hello":
+            return statusFor(state);
+        case "tab:opened":
+            if (!isPlayer || state.stopped || !state.openPending)
+                return false;
+            state.openPending = false;
+            saveState(state);
+            return true;
+        case "tab:ended":
+            if (!isPlayer || state.stopped || state.mode === null)
+                return null;
+            if (state.mode === "dvr") {
+                await playNextDvr(state);
+            }
+            else {
+                state.index += 1;
+                await playCurrent(state);
+            }
+            break;
+        case "tab:previous":
+            if (!isPlayer || state.stopped || state.mode === null)
+                return null;
+            if (state.mode === "dvr") {
+                playPreviousDvr(state);
+            }
+            else {
+                state.index = Math.max(0, state.index - 1);
+                await playCurrent(state);
+            }
+            break;
+        case "tab:stop":
+            if (!isPlayer)
+                return null;
+            state.stopped = true;
+            break;
+        case "tab:resume":
+            state.playerTabId = currentTabId();
+            state.stopped = false;
+            break;
+        case "remote:stop":
+            state.stopped = true;
+            break;
+        case "custom:start":
+            state.mode = "custom";
+            state.queue = request.urls.map((url) => ({ url }));
+            state.index = 0;
+            state.channelPath = null;
+            await playCurrent(state);
+            break;
+        case "dvr:play":
+            state.playerTabId = currentTabId();
+            await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .markEpisodeWatched */ .v$)(request.program.episodeId);
+            playDvr(state, request.program, [
+                ...(state.mode === "dvr" ? state.history : []),
+                request.program,
+            ]);
+            break;
+    }
+    saveState(state);
+    const pending = afterSave;
+    afterSave = [];
+    pending.forEach((run) => run());
+    return statusFor(state);
+}
+let queue = Promise.resolve();
+// TODO: Validate
+function send(request) {
+    const run = queue
+        .then(() => handle(request))
+        .catch((error) => {
+        afterSave = [];
+        console.error(LOG_PREFIX, error);
+        return null;
+    });
+    queue = run;
+    return run;
+}
+
+
+/***/ },
+
 /***/ "./src/shared.ts"
 (__unused_webpack_module, __webpack_exports__, __webpack_require__) {
 
@@ -1956,18 +3529,25 @@ function init() {
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Bc: () => (/* binding */ fadeWhenIdle),
 /* harmony export */   IP: () => (/* binding */ clickWhenShown),
+/* harmony export */   J9: () => (/* binding */ currentTabStatus),
+/* harmony export */   OR: () => (/* binding */ isControlledTab),
 /* harmony export */   TD: () => (/* binding */ initVideoPlugin),
-/* harmony export */   V_: () => (/* binding */ registerSkipMenus),
 /* harmony export */   Xd: () => (/* binding */ shouldSkipCredits),
 /* harmony export */   _3: () => (/* binding */ shouldSkipIntros),
+/* harmony export */   _U: () => (/* binding */ fitFakeFullscreen),
 /* harmony export */   h: () => (/* binding */ createLogger),
 /* harmony export */   iq: () => (/* binding */ addMenuCommand),
+/* harmony export */   j0: () => (/* binding */ createGuideButton),
 /* harmony export */   oU: () => (/* binding */ FADE_HIDDEN_STYLE),
 /* harmony export */   xk: () => (/* binding */ waitForElement),
 /* harmony export */   yy: () => (/* binding */ sleep)
 /* harmony export */ });
-/* unused harmony exports claimTab, waitForQuiet, stopAutoControl, resumeAutoControl, setFakeFullscreen, mountPlayerControls, enableDebug, signalPreviousEpisode, signalEpisodeEnded, watchUrlChange, initUrlChangePlugin, expandPlayer */
+/* unused harmony exports waitForQuiet, stopAutoControl, resumeAutoControl, setFakeFullscreen, mountPlayerControls, enableDebug, signalPreviousEpisode, signalEpisodeEnded, watchUrlChange, expandPlayer */
+/* harmony import */ var _dvr__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/dvr.ts");
+/* harmony import */ var _remote__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__("./src/remote.ts");
 // TODO: Validate
+
+
 const REMOTE_LOG = "[Stream Channeler Remote]";
 /**
  * Console logging tagged "[Stream Channeler Remote]" (plus the site, when
@@ -1982,24 +3562,23 @@ function createLogger(site) {
         error: (...args) => console.error(prefix, ...args),
     };
 }
-/**
- * Whether this tab was opened by Stream Channeler Remote. The first call in a
- * claimed tab consumes the marker, so a tab the user opens later isn't taken
- * over; call it once, at the start of a playback plugin.
- */
-function claimTab() {
-    if (!GM_getValue("loadingTab", false))
-        return false;
-    GM_setValue("loadingTab", false);
-    return true;
+let tabStatus = null;
+// TODO: Validate
+function currentTabStatus() {
+    return tabStatus;
+}
+// TODO: Validate
+async function isControlledTab() {
+    tabStatus ?? (tabStatus = await (0,_remote__WEBPACK_IMPORTED_MODULE_1__/* .send */ .tN)({ type: "tab:hello" }));
+    return tabStatus?.controlled ?? false;
 }
 // TODO: Validate
 function shouldSkipIntros() {
-    return GM_getValue("skipIntros", true);
+    return GM_getValue(_remote__WEBPACK_IMPORTED_MODULE_1__/* .SKIP_INTROS_KEY */ .o1, true);
 }
 // TODO: Validate
 function shouldSkipCredits() {
-    return GM_getValue("skipCredits", true);
+    return GM_getValue(_remote__WEBPACK_IMPORTED_MODULE_1__/* .SKIP_CREDITS_KEY */ .HA, true);
 }
 const menuSections = ["start", "settings", "builder"];
 const menuCommands = [];
@@ -2015,19 +3594,6 @@ function renderMenu() {
 function addMenuCommand(section, label, run) {
     menuCommands.push({ section, label, run });
     renderMenu();
-}
-const skipSettings = [
-    { key: "skipIntros", noun: "intros" },
-    { key: "skipCredits", noun: "credits" },
-];
-// TODO: Validate
-function registerSkipMenus() {
-    for (const { key, noun } of skipSettings) {
-        addMenuCommand("settings", () => GM_getValue(key, true)
-            ? `Skipping ${noun} (click to play ${noun})`
-            : `Playing ${noun} (click to skip ${noun})`, () => GM_setValue(key, !GM_getValue(key, true)));
-        GM_addValueChangeListener(key, renderMenu);
-    }
 }
 // TODO: Validate
 function clickWhenShown(selector, text) {
@@ -2096,18 +3662,17 @@ let autoControlStopped = false;
 // Mark automatic control as stopped so signalEpisodeEnded() stops advancing the
 // channel and the current tab stays open. Exposed so plugins can wire it up to
 // their own stop control (e.g. NHK embeds one in the player's control bar).
+// TODO: Validate
 function stopAutoControl(log) {
     autoControlStopped = true;
     log.log("Automatic control stopped by user");
-    // Tell the controller on the channels page to stop too, so its Start/Stop
-    // Remote button updates. A fresh timestamp guarantees a value change.
-    GM_setValue("remoteStopRequested", Date.now());
+    void (0,_remote__WEBPACK_IMPORTED_MODULE_1__/* .send */ .tN)({ type: "tab:stop" });
 }
 // TODO: Validate
 function resumeAutoControl(log) {
     autoControlStopped = false;
     log.log("Automatic control resumed by user");
-    GM_setValue("remoteResumeRequested", Date.now());
+    void (0,_remote__WEBPACK_IMPORTED_MODULE_1__/* .send */ .tN)({ type: "tab:resume" });
 }
 // Icons as structured data (root svg attrs + child shapes). Built via
 // createElementNS rather than from a markup string because YouTube's strict CSP
@@ -2150,26 +3715,62 @@ function createOverlayButton(doc, id, label, icon, onClick) {
     });
     return button;
 }
-// Fake fullscreen by covering the viewport with fixed inline styles, applied in
-// place (the element never moves, so there's no reload). Styles are inline via
-// CSSOM (not an injected <style>) so a strict CSP can't block them. Pass the
-// player *wrapper* that contains the site's own controls so they come along into
-// fullscreen. There's no undo: stopping auto control and refreshing the page
-// restores the original layout.
-const FAKE_FULLSCREEN_CLASS = "scr-fake-fullscreen";
-function setFakeFullscreen(target) {
-    if (target.classList.contains(FAKE_FULLSCREEN_CLASS))
-        return;
+let fakeFullscreen = null;
+let guidePlayer = null;
+// TODO: Validate
+function fakeFullscreenBox() {
+    return (0,_dvr__WEBPACK_IMPORTED_MODULE_0__/* .isDvrGuideOpen */ .Vs)()
+        ? {
+            left: `${_dvr__WEBPACK_IMPORTED_MODULE_0__/* .DVR_DETAIL_WIDTH_VW */ .We}vw`,
+            width: `${100 - _dvr__WEBPACK_IMPORTED_MODULE_0__/* .DVR_DETAIL_WIDTH_VW */ .We}vw`,
+            height: `${100 - _dvr__WEBPACK_IMPORTED_MODULE_0__/* .DVR_GUIDE_HEIGHT_VH */ .de}vh`,
+        }
+        : { left: "0", width: "100vw", height: "100vh" };
+}
+// TODO: Validate
+function setFakeFullscreenStyle(state, el, prop, value) {
+    let props = state.original.get(el);
+    if (!props) {
+        props = new Map();
+        state.original.set(el, props);
+    }
+    if (!props.has(prop)) {
+        props.set(prop, [
+            el.style.getPropertyValue(prop),
+            el.style.getPropertyPriority(prop),
+        ]);
+    }
+    el.style.setProperty(prop, value, "important");
+}
+// TODO: Validate
+function fitFakeFullscreen() {
+    if ((0,_dvr__WEBPACK_IMPORTED_MODULE_0__/* .isDvrGuideOpen */ .Vs)() && !fakeFullscreen && guidePlayer) {
+        const video = findVideo(guidePlayer.videoSelector);
+        if (video) {
+            setFakeFullscreen(findPlayer(video, guidePlayer.playerSelectors), true);
+        }
+    }
+    else if (!(0,_dvr__WEBPACK_IMPORTED_MODULE_0__/* .isDvrGuideOpen */ .Vs)() && fakeFullscreen?.forGuide) {
+        exitFakeFullscreen(fakeFullscreen);
+    }
+    if (fakeFullscreen) {
+        for (const [prop, value] of Object.entries(fakeFullscreenBox())) {
+            setFakeFullscreenStyle(fakeFullscreen, fakeFullscreen.target, prop, value);
+        }
+    }
+    window.dispatchEvent(new Event("resize"));
+}
+// TODO: Validate
+function applyFakeFullscreenStyles(state) {
+    const { target } = state;
     for (const [prop, value] of Object.entries({
         position: "fixed",
         top: "0",
-        left: "0",
-        width: "100vw",
-        height: "100vh",
+        ...fakeFullscreenBox(),
         "z-index": "2147483646",
         background: "#000",
     })) {
-        target.style.setProperty(prop, value, "important");
+        setFakeFullscreenStyle(state, target, prop, value);
     }
     // A fixed player can be trapped inside a transformed ancestor's stacking
     // context, so other page elements paint over it. Lift every ancestor to the
@@ -2177,13 +3778,57 @@ function setFakeFullscreen(target) {
     // floats above the page. z-index only changes paint order (no reflow); any
     // shift from positioning a static ancestor is hidden behind the player.
     for (let el = target.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
-        el.style.setProperty("z-index", "2147483646", "important");
+        setFakeFullscreenStyle(state, el, "z-index", "2147483646");
         if (getComputedStyle(el).position === "static") {
-            el.style.setProperty("position", "relative", "important");
+            setFakeFullscreenStyle(state, el, "position", "relative");
         }
     }
-    document.documentElement.style.overflow = "hidden";
-    target.classList.add(FAKE_FULLSCREEN_CLASS);
+}
+// TODO: Validate
+function setFakeFullscreen(target, forGuide = false) {
+    if (fakeFullscreen) {
+        if (!forGuide)
+            fakeFullscreen.forGuide = false;
+        return;
+    }
+    let parent = target.parentElement;
+    const state = {
+        target,
+        original: new Map(),
+        forGuide,
+        observer: new MutationObserver(() => {
+            if (target.parentElement === parent &&
+                target.style.getPropertyValue("position") === "fixed") {
+                return;
+            }
+            parent = target.parentElement;
+            applyFakeFullscreenStyles(state);
+        }),
+    };
+    fakeFullscreen = state;
+    applyFakeFullscreenStyles(state);
+    setFakeFullscreenStyle(state, document.documentElement, "overflow", "hidden");
+    state.observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["style"],
+    });
+}
+// TODO: Validate
+function exitFakeFullscreen(state) {
+    state.observer.disconnect();
+    for (const [el, props] of state.original) {
+        for (const [prop, [value, priority]] of props) {
+            if (value) {
+                el.style.setProperty(prop, value, priority);
+            }
+            else {
+                el.style.removeProperty(prop);
+            }
+        }
+    }
+    fakeFullscreen = null;
 }
 /**
  * Call `handler` on every pointer move over the page, including over same-origin
@@ -2263,7 +3908,7 @@ function fadeWhenIdle(getElement) {
     });
     // Pointer left the page entirely (no element it moved to).
     document.addEventListener("pointerout", (event) => {
-        if (!event.relatedTarget)
+        if (!event.relatedTarget && event.pointerType === "mouse")
             hide();
     }, { capture: true, passive: true });
     window.addEventListener("blur", hide);
@@ -2277,11 +3922,7 @@ function fadeWhenIdle(getElement) {
 function mountPlayerControls(log) {
     if (document.getElementById("stream-channeler-controls"))
         return;
-    const container = document.createElement("div");
-    container.id = "stream-channeler-controls";
-    container.style.cssText =
-        "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;";
-    fadeWhenIdle(() => container);
+    const container = createControlsContainer();
     const stopIcon = {
         attrs: {
             viewBox: "0 0 24 24",
@@ -2307,7 +3948,7 @@ function mountPlayerControls(log) {
         },
         shapes: [{ tag: "polygon", attrs: { points: "7 4 19 12 7 20 7 4" } }],
     };
-    const stopButton = createOverlayButton(document, "stream-channeler-stop-btn", "Stop Auto Control", stopIcon, () => {
+    const stopButton = createOverlayButton(document, "stream-channeler-stop-btn", autoControlStopped ? "Resume Auto Control" : "Stop Auto Control", autoControlStopped ? resumeIcon : stopIcon, () => {
         const [icon, label] = autoControlStopped
             ? [stopIcon, "Stop Auto Control"]
             : [resumeIcon, "Resume Auto Control"];
@@ -2319,31 +3960,6 @@ function mountPlayerControls(log) {
         }
         stopButton.title = label;
         setButtonContent(document, stopButton, icon, label);
-    });
-    const refreshButton = createOverlayButton(document, "stream-channeler-refresh-btn", "Refresh", {
-        attrs: {
-            viewBox: "0 0 24 24",
-            width: "16",
-            height: "16",
-            fill: "none",
-            stroke: "currentColor",
-            "stroke-width": "2",
-            "stroke-linecap": "round",
-            "stroke-linejoin": "round",
-            "aria-hidden": "true",
-        },
-        shapes: [
-            {
-                tag: "path",
-                attrs: { d: "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" },
-            },
-            { tag: "path", attrs: { d: "M21 3v5h-5" } },
-        ],
-    }, () => {
-        if (!autoControlStopped)
-            GM_setValue("loadingTab", true);
-        log.log("Refreshing the page");
-        location.reload();
     });
     const nextButton = createOverlayButton(document, "stream-channeler-next-btn", "Play Next Episode", {
         attrs: {
@@ -2383,7 +3999,56 @@ function mountPlayerControls(log) {
     }, () => {
         signalPreviousEpisode(log, "Play Previous Episode was clicked");
     });
-    container.append(refreshButton, previousButton, nextButton, stopButton);
+    container.append(previousButton, nextButton, stopButton);
+    container.prepend(createGuideButton(log));
+    attachControls(log, container);
+}
+// TODO: Validate
+function mountGuideControls(log) {
+    if (document.getElementById("stream-channeler-controls"))
+        return;
+    const container = createControlsContainer();
+    container.append(createGuideButton(log));
+    attachControls(log, container);
+}
+// TODO: Validate
+function createControlsContainer() {
+    const container = document.createElement("div");
+    container.id = "stream-channeler-controls";
+    container.style.cssText =
+        "position:fixed;top:12px;right:12px;z-index:2147483647;display:flex;gap:8px;";
+    fadeWhenIdle(() => container);
+    return container;
+}
+// TODO: Validate
+function createGuideButton(log) {
+    (0,_dvr__WEBPACK_IMPORTED_MODULE_0__/* .mountDvrGuide */ .kQ)(log);
+    return createOverlayButton(document, "stream-channeler-guide-btn", "Guide", {
+        attrs: {
+            viewBox: "0 0 24 24",
+            width: "16",
+            height: "16",
+            fill: "none",
+            stroke: "currentColor",
+            "stroke-width": "2",
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            "aria-hidden": "true",
+        },
+        shapes: [
+            {
+                tag: "rect",
+                attrs: { x: "2", y: "3", width: "20", height: "14", rx: "2" },
+            },
+            { tag: "path", attrs: { d: "M2 9h20" } },
+            { tag: "path", attrs: { d: "M9 9v8" } },
+            { tag: "path", attrs: { d: "M12 17v4" } },
+            { tag: "path", attrs: { d: "M8 21h8" } },
+        ],
+    }, _dvr__WEBPACK_IMPORTED_MODULE_0__/* .toggleDvrGuide */ .nl);
+}
+// TODO: Validate
+function attachControls(log, container) {
     document.body.appendChild(container);
     log.debug("Player controls overlay added");
     new MutationObserver(() => {
@@ -2453,9 +4118,10 @@ function signalPreviousEpisode(log, reason) {
         return;
     }
     leaveEpisode(log, reason, () => {
-        log.log("Going back to the previous episode, closing tab");
-        GM_setValue("previousEpisodeRequested", Date.now());
-        window.close();
+        log.log("Going back to the previous episode");
+        void (0,_remote__WEBPACK_IMPORTED_MODULE_1__/* .send */ .tN)({ type: "tab:previous", reason }).finally(() => {
+            episodeEndSignaled = false;
+        });
     });
 }
 // TODO: Validate
@@ -2467,19 +4133,10 @@ function signalEpisodeEnded(log, reason) {
         return;
     }
     leaveEpisode(log, reason, () => {
-        log.log("Episode ended, closing tab");
-        const now = Date.now();
-        const current = GM_getValue("videoEnded", 0);
-        log.debug("videoEnded:", current, "now:", now);
-        // Only signal if the current value is older (stop sets it to far future)
-        if (now > current) {
-            log.debug("Setting videoEnded to", now);
-            GM_setValue("videoEnded", now);
-        }
-        else {
-            log.warn("Not signaling: videoEnded is newer than now (was the remote stopped?)");
-        }
-        window.close();
+        log.log("Episode ended, waiting for the next one");
+        void (0,_remote__WEBPACK_IMPORTED_MODULE_1__/* .send */ .tN)({ type: "tab:ended", reason }).finally(() => {
+            episodeEndSignaled = false;
+        });
     });
 }
 /**
@@ -2521,47 +4178,21 @@ function watchUrlChange(log, delayMs = 0) {
         window.addEventListener("popstate", checkUrlChanged);
     }, delayMs);
 }
-/**
- * Generic plugin for sites where episode end is detected by URL change. When
- * `playerSelectors` is given, the player is also fake-fullscreened with the
- * overlay controls; otherwise only the floating stop button is shown. `start`
- * runs first, for pages that need a click to begin playback (it should resolve
- * once the site has navigated to the player, so that navigation isn't mistaken
- * for the end of the episode). With `watchVideo`, the end of the <video> also
- * counts, for sites that only sometimes navigate when an episode finishes; a
- * number waits that many seconds after the video finishes before moving on.
- */
-async function initUrlChangePlugin(name, playerSelectors, start, { watchVideo = false, debug = false, } = {}) {
-    const log = createLogger(name);
-    if (!claimTab()) {
-        log.debug("Tab not opened by the remote, skipping");
-        return;
+// TODO: Validate
+async function initTab(log, debug) {
+    if (!(await isControlledTab())) {
+        log.debug("Tab not opened by the remote, leaving it alone");
+        if (GM_getValue(_remote__WEBPACK_IMPORTED_MODULE_1__/* .ALWAYS_SHOW_GUIDE_KEY */ .j8, true))
+            mountGuideControls(log);
+        return false;
     }
+    autoControlStopped = tabStatus?.stopped ?? false;
+    log.log("Tab controlled by Stream Channeler Remote");
     if (debug)
         enableDebug();
-    if (start) {
-        try {
-            await start(log);
-        }
-        catch (error) {
-            log.error("Could not start playback:", error);
-            mountPlayerControls(log);
-            return;
-        }
-    }
-    watchUrlChange(log);
-    if (watchVideo !== false)
-        watchVideoCompletion(log, "video", watchVideo);
-    if (!playerSelectors) {
-        mountPlayerControls(log);
-        return;
-    }
-    waitForElement("video")
-        .then((video) => expandPlayer(log, video, playerSelectors))
-        .catch((error) => {
-        log.warn("No video found; showing stop button only:", error);
-        mountPlayerControls(log);
-    });
+    mountPlayerControls(log);
+    (0,_remote__WEBPACK_IMPORTED_MODULE_1__/* .listenForPlayRequests */ .vp)();
+    return true;
 }
 // Climb from the <video> while each parent is still the same size as the video.
 // Sites usually overlay their controls on a wrapper exactly the video's size, so
@@ -2580,6 +4211,15 @@ function findSameSizeWrapper(video) {
     }
     return wrapper === video ? (video.parentElement ?? video) : wrapper;
 }
+// TODO: Validate
+function findPlayer(video, playerSelectors) {
+    for (const selector of playerSelectors) {
+        const player = video.closest(selector);
+        if (player)
+            return player;
+    }
+    return findSameSizeWrapper(video);
+}
 /**
  * Fake-fullscreen the wrapper that holds the site's own controls (not the bare
  * <video>, or the controls are left behind on the page) and mount the overlay
@@ -2587,17 +4227,9 @@ function findSameSizeWrapper(video) {
  * match, the outermost wrapper the same size as the video is used.
  */
 async function expandPlayer(log, video, playerSelectors = []) {
-    let player = null;
-    for (const selector of playerSelectors) {
-        player = video.closest(selector);
-        if (player)
-            break;
-    }
-    player ?? (player = findSameSizeWrapper(video));
-    const target = player;
+    const target = findPlayer(video, playerSelectors);
     log.debug("Fullscreen target:", target);
     try {
-        mountPlayerControls(log);
         // These players keep restyling themselves while they lay out after load, so
         // wait for that to stop or our fullscreen styles get overwritten.
         await waitForQuiet(target);
@@ -2605,26 +4237,26 @@ async function expandPlayer(log, video, playerSelectors = []) {
         log.debug("Fullscreen applied");
     }
     catch (error) {
-        log.error("Controls/fullscreen setup failed:", error);
+        log.error("Fullscreen setup failed:", error);
     }
 }
 const VIDEO_POLL_MS = 1000;
 // TODO: Validate
 function findVideo(selector) {
-    const video = document.querySelector(selector);
-    if (video)
-        return video;
+    const documents = [document];
     for (const frame of Array.from(document.querySelectorAll("iframe"))) {
         try {
-            const framed = frame.contentDocument?.querySelector(selector);
-            if (framed)
-                return framed;
+            if (frame.contentDocument)
+                documents.push(frame.contentDocument);
         }
         catch {
             continue;
         }
     }
-    return null;
+    const videos = documents.flatMap((doc) => Array.from(doc.querySelectorAll(selector)));
+    return (videos.find((video) => video.getBoundingClientRect().width > 0) ??
+        videos[0] ??
+        null);
 }
 // TODO: Validate
 async function waitForVideo(selector, timeoutMs = 15000) {
@@ -2650,22 +4282,44 @@ async function waitForVideo(selector, timeoutMs = 15000) {
 // TODO: Validate
 async function initVideoPlugin(config) {
     const log = createLogger(config.name);
-    if (!claimTab())
-        return;
-    if (config.debug)
-        enableDebug();
     const videoSelector = config.videoSelector ?? "video";
-    log.log("Tab opened by Stream Channeler Remote, initializing");
-    if (config.start) {
+    guidePlayer = {
+        videoSelector,
+        playerSelectors: config.playerToFullscreen ?? [],
+    };
+    if (!(await initTab(log, config.debug ?? false)))
+        return;
+    const navigation = performance.getEntriesByType("navigation")[0];
+    const opened = (await (0,_remote__WEBPACK_IMPORTED_MODULE_1__/* .send */ .tN)({ type: "tab:opened" })) ||
+        (!autoControlStopped && navigation?.type === "reload");
+    if (opened && config.start) {
         try {
             await config.start(log);
         }
         catch (error) {
             log.error("Could not start playback:", error);
-            mountPlayerControls(log);
             return;
         }
     }
+    watchEpisode(log, config, videoSelector);
+    if (!opened)
+        return;
+    let video;
+    try {
+        video = await waitForVideo(videoSelector);
+    }
+    catch (error) {
+        log.warn("No video found to make fullscreen or start:", error);
+        return;
+    }
+    await expandPlayer(log, video, config.playerToFullscreen);
+    if (config.manualAutoplay ?? true) {
+        log.log("Starting playback of the episode the remote opened");
+        startPlayback(log, videoSelector);
+    }
+}
+// TODO: Validate
+function watchEpisode(log, config, videoSelector) {
     const { endSelector, isEnded } = config;
     for (const selector of [endSelector ?? []].flat()) {
         watchEndCheck(log, `element shown (${selector})`, () => document.querySelector(selector) !== null);
@@ -2675,30 +4329,18 @@ async function initVideoPlugin(config) {
     for (const clickButton of config.clickButtons ?? []) {
         keepTrying(log, `Clicked ${clickButton.name}`, clickButton);
     }
-    let video;
-    try {
-        video = await waitForVideo(videoSelector);
-    }
-    catch (error) {
-        log.warn("No video found; falling back to URL watching:", error);
-        mountPlayerControls(log);
-        watchUrlChange(log, config.urlChangeDelayMs);
-        return;
-    }
-    if (config.playerToFullscreen) {
-        await expandPlayer(log, video, config.playerToFullscreen);
-    }
-    else {
-        mountPlayerControls(log);
-    }
-    if (config.manualAutoplay ?? true)
-        startPlayback(log, videoSelector);
     if (config.watchForVideoForCompletion !== undefined &&
         config.watchForVideoForCompletion !== false) {
         watchVideoCompletion(log, videoSelector, config.watchForVideoForCompletion);
     }
     if (config.watcForhUrlChange) {
         watchUrlChange(log, config.urlChangeDelayMs);
+    }
+    else {
+        waitForVideo(videoSelector).catch((error) => {
+            log.warn("No video found; falling back to URL watching:", error);
+            watchUrlChange(log, config.urlChangeDelayMs);
+        });
     }
     log.debug("Watching for the end of the episode");
 }
@@ -2814,6 +4456,534 @@ function watchVideoCompletion(log, videoSelector, setting) {
             finish(`reached ${currentTime.toFixed(1)}s of ${duration.toFixed(1)}s`);
         }
     }, VIDEO_POLL_MS);
+}
+
+
+/***/ },
+
+/***/ "./src/site_cache.ts"
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Lz: () => (/* binding */ loadFavoriteChannels),
+/* harmony export */   YE: () => (/* binding */ startGuideSync),
+/* harmony export */   cu: () => (/* binding */ loadChannelEpisodes),
+/* harmony export */   pK: () => (/* binding */ loadMorePublicChannels),
+/* harmony export */   ti: () => (/* binding */ fillChannelNames)
+/* harmony export */ });
+/* harmony import */ var _dvr_api__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__("./src/dvr_api.ts");
+// TODO: Validate
+
+const SYNC_MS = 2000;
+const PUBLIC_PAGE_ATTEMPTS = 5;
+const namesRequested = new Set();
+let lastRaw;
+let lastClient = null;
+// TODO: Validate
+function readPersistedCache() {
+    return new Promise((resolve, reject) => {
+        const open = indexedDB.open("keyval-store");
+        open.onupgradeneeded = () => open.result.createObjectStore("keyval");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+            const db = open.result;
+            const request = db
+                .transaction("keyval", "readonly")
+                .objectStore("keyval")
+                .get("REACT_QUERY_OFFLINE_CACHE");
+            request.onsuccess = () => {
+                db.close();
+                resolve(request.result);
+            };
+            request.onerror = () => {
+                db.close();
+                reject(request.error);
+            };
+        };
+    });
+}
+// TODO: Validate
+function patchPersistedCache(patch) {
+    return new Promise((resolve, reject) => {
+        const open = indexedDB.open("keyval-store");
+        open.onupgradeneeded = () => open.result.createObjectStore("keyval");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+            const db = open.result;
+            const transaction = db.transaction("keyval", "readwrite");
+            const store = transaction.objectStore("keyval");
+            const request = store.get("REACT_QUERY_OFFLINE_CACHE");
+            request.onsuccess = () => {
+                const raw = request.result;
+                if (!raw)
+                    return;
+                const client = JSON.parse(raw);
+                if (patch(client)) {
+                    store.put(JSON.stringify(client), "REACT_QUERY_OFFLINE_CACHE");
+                }
+            };
+            transaction.oncomplete = () => {
+                db.close();
+                resolve();
+            };
+            transaction.onerror = () => {
+                db.close();
+                reject(transaction.error);
+            };
+        };
+    });
+}
+// TODO: Validate
+async function loadClient() {
+    const raw = await readPersistedCache();
+    if (!raw)
+        return null;
+    if (raw !== lastRaw) {
+        lastRaw = raw;
+        lastClient = JSON.parse(raw);
+    }
+    return lastClient;
+}
+// TODO: Validate
+function isObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+// TODO: Validate
+function episodesOf(data) {
+    if (!isObject(data) || !Array.isArray(data.episodes))
+        return [];
+    return data.episodes.filter(isObject);
+}
+// TODO: Validate
+function text(source, ...keys) {
+    for (const key of keys) {
+        const value = source[key];
+        if (typeof value === "string" && value.length > 0)
+            return value;
+    }
+    return null;
+}
+// TODO: Validate
+function count(source, ...keys) {
+    for (const key of keys) {
+        const value = source[key];
+        if (typeof value === "number" && Number.isFinite(value))
+            return value;
+    }
+    return null;
+}
+// TODO: Validate
+function queryKeyOf(query) {
+    if (Array.isArray(query.queryKey))
+        return query.queryKey;
+    try {
+        const parsed = JSON.parse(query.queryHash);
+        return Array.isArray(parsed) ? parsed : [];
+    }
+    catch {
+        return [];
+    }
+}
+// TODO: Validate
+function lookup(data, table, id) {
+    const entries = data[table];
+    if (!isObject(entries) || typeof id !== "string")
+        return {};
+    const entry = entries[id];
+    return isObject(entry) ? entry : {};
+}
+// TODO: Validate
+function cardSubtitle(episode, season, title) {
+    if (title.media_type === "Movie")
+        return "Movie";
+    const linked = typeof episode.tmdb_episode_id === "string" &&
+        episode.tmdb_episode_id !== episode.id;
+    const seasonNumber = linked
+        ? count(episode, "tmdb_season_number")
+        : count(season, "season_number");
+    const number = linked
+        ? count(episode, "tmdb_episode_number")
+        : count(episode, "episode_number");
+    const numbering = seasonNumber !== null && number !== null
+        ? `S${seasonNumber} Ep${number}`
+        : number !== null
+            ? `Ep${number}`
+            : null;
+    return [numbering, text(episode, "name")].filter(Boolean).join(" · ");
+}
+// TODO: Validate
+function cardThumbnail(episode) {
+    const images = Array.isArray(episode.images)
+        ? episode.images.filter(isObject)
+        : [];
+    for (const kind of ["still", "backdrop", "poster"]) {
+        const image = images.find((candidate) => candidate.kind === kind);
+        if (image && isObject(image.urls)) {
+            return (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(text(image.urls, "w300", "w780", "original"));
+        }
+    }
+    return null;
+}
+// TODO: Validate
+function programsFromCards(data) {
+    if (!isObject(data))
+        return [];
+    return episodesOf(data).flatMap((episode) => {
+        const id = text(episode, "id");
+        if (!id)
+            return [];
+        const season = lookup(data, "seasons", episode.season_id);
+        const title = lookup(data, "titles", season.title_id);
+        const source = lookup(data, "sources", title.source_id);
+        const plugin = lookup(data, "plugins", source.plugin_id);
+        return [
+            {
+                episode_id: id,
+                title: text(title, "name"),
+                subtitle: cardSubtitle(episode, season, title),
+                url: text(episode, "url"),
+                duration: count(episode, "duration"),
+                thumbnail_url: cardThumbnail(episode),
+                favicon_url: (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(text(source, "favicon_url")),
+                source_key: text(source, "key") ?? "",
+                plugin_key: text(plugin, "key"),
+                watched: episode.watch_date !== null && episode.watch_date !== undefined,
+                description: text(episode, "description"),
+            },
+        ];
+    });
+}
+// TODO: Validate
+function isGuideChannel(value) {
+    return (isObject(value) &&
+        typeof value.id === "string" &&
+        Array.isArray(value.programs));
+}
+// TODO: Validate
+function collectChannelInfo(value, info, depth = 0) {
+    if (depth > 6)
+        return;
+    if (Array.isArray(value)) {
+        value.forEach((item) => collectChannelInfo(item, info, depth + 1));
+        return;
+    }
+    if (!isObject(value))
+        return;
+    if (typeof value.id === "string" &&
+        (typeof value.name === "string" || typeof value.custom_name === "string")) {
+        info.set(value.id, { ...value, ...info.get(value.id) });
+    }
+    for (const child of Object.values(value)) {
+        if (typeof child === "object")
+            collectChannelInfo(child, info, depth + 1);
+    }
+}
+// TODO: Validate
+function markWatched(value, watched, depth = 0) {
+    if (depth > 8)
+        return false;
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => markWatched(item, watched, depth + 1))
+            .some(Boolean);
+    }
+    if (!isObject(value))
+        return false;
+    let changed = false;
+    const id = text(value, "episode_id", "id");
+    if (id && id in watched) {
+        if (value.watched === false) {
+            value.watched = true;
+            changed = true;
+        }
+        if ("watch_date" in value && value.watch_date === null) {
+            value.watch_date = new Date(watched[id]).toISOString();
+            changed = true;
+        }
+    }
+    for (const child of Object.values(value)) {
+        if (typeof child === "object" && markWatched(child, watched, depth + 1)) {
+            changed = true;
+        }
+    }
+    return changed;
+}
+// TODO: Validate
+async function markWatchedInSiteCache(watched) {
+    if (Object.keys(watched).length === 0)
+        return;
+    await patchPersistedCache((client) => client.clientState.queries
+        .map((query) => markWatched(query.state.data, watched))
+        .some(Boolean));
+}
+// TODO: Validate
+function favoriteChannelIds(client) {
+    for (const query of client.clientState.queries) {
+        const [kind, scope] = queryKeyOf(query);
+        const data = query.state.data;
+        if (kind !== "channels" || scope !== "favorite-ids")
+            continue;
+        if (!Array.isArray(data))
+            continue;
+        return {
+            ids: data.filter((id) => typeof id === "string"),
+            updatedAt: query.state.dataUpdatedAt ?? 0,
+        };
+    }
+    return null;
+}
+// TODO: Validate
+function newerChannels(built, previous) {
+    const previousById = new Map(previous.map((channel) => [channel.id, channel]));
+    const builtIds = new Set(built.map((channel) => channel.id));
+    return [
+        ...built.map((channel) => {
+            const older = previousById.get(channel.id);
+            if (!older)
+                return channel;
+            const chosen = (older.updatedAt ?? 0) > (channel.updatedAt ?? 0) ? older : channel;
+            return {
+                ...chosen,
+                name: chosen.name ?? channel.name ?? older.name,
+                number: chosen.number ?? channel.number ?? older.number,
+                query: channel.query ?? older.query,
+            };
+        }),
+        ...previous.filter((channel) => channel.fromApi && !builtIds.has(channel.id)),
+    ];
+}
+// TODO: Validate
+function defaultQuery(details) {
+    const order = text(details, "default_order");
+    if (!order)
+        return null;
+    try {
+        const parsed = JSON.parse(order);
+        return isObject(parsed) ? parsed : null;
+    }
+    catch {
+        return null;
+    }
+}
+// TODO: Validate
+function buildGuide(client) {
+    const queries = [...client.clientState.queries].sort((a, b) => (b.state.dataUpdatedAt ?? 0) - (a.state.dataUpdatedAt ?? 0));
+    const channels = new Map();
+    const info = new Map();
+    for (const query of queries) {
+        const data = query.state.data;
+        collectChannelInfo(data, info);
+        const listed = isObject(data) && Array.isArray(data.channels) ? data.channels : [data];
+        for (const channel of listed) {
+            if (isGuideChannel(channel) && !channels.has(channel.id)) {
+                const raw = channel;
+                channels.set(channel.id, {
+                    ...channel,
+                    query: defaultQuery(info.get(channel.id) ?? raw),
+                    name: text(raw, "custom_name", "name"),
+                    number: count(raw, "custom_channel_number", "number", "channel_number"),
+                    updatedAt: query.state.dataUpdatedAt ?? 0,
+                    programs: channel.programs.map((program) => ({
+                        ...program,
+                        thumbnail_url: (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(program.thumbnail_url),
+                        favicon_url: (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(program.favicon_url),
+                    })),
+                });
+            }
+        }
+    }
+    const episodeQueries = queries.filter((query) => ["episodes", "episodes-preview"].includes(String(queryKeyOf(query)[0])));
+    for (const query of episodeQueries) {
+        const [kind, channelId, params, seed] = queryKeyOf(query);
+        if (typeof channelId !== "string")
+            continue;
+        if (channels.has(channelId))
+            continue;
+        const programs = programsFromCards(query.state.data);
+        if (programs.length === 0)
+            continue;
+        const details = info.get(channelId) ?? {};
+        const preview = kind === "episodes-preview";
+        channels.set(channelId, {
+            query: isObject(params)
+                ? preview && typeof seed === "number"
+                    ? { ...params, randomSeed: seed }
+                    : params
+                : defaultQuery(details),
+            loadedAll: !preview || programs.length < _dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PREVIEW_LIMIT */ .FZ,
+            id: channelId,
+            name: text(details, "custom_name", "name"),
+            number: count(details, "custom_channel_number", "number", "channel_number"),
+            programs,
+            updatedAt: query.state.dataUpdatedAt ?? 0,
+        });
+    }
+    return Array.from(channels.values()).sort((a, b) => (a.number ?? Number.MAX_SAFE_INTEGER) -
+        (b.number ?? Number.MAX_SAFE_INTEGER) ||
+        (a.name ?? "").localeCompare(b.name ?? ""));
+}
+// TODO: Validate
+function withWatched(programs, watched) {
+    return programs.map((program) => program.episode_id in watched ? { ...program, watched: true } : program);
+}
+// TODO: Validate
+async function loadChannelEpisodes(channel, all) {
+    if (!channel.query) {
+        throw new Error(`No episode order known for ${channel.id}`);
+    }
+    const data = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchChannelEpisodes */ .ui)(channel.id, all ? channel.query : { ...channel.query, limit: _dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PREVIEW_LIMIT */ .FZ });
+    const programs = withWatched(programsFromCards(data), (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readWatched */ .vj)());
+    const loadedAll = all || programs.length < _dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PREVIEW_LIMIT */ .FZ;
+    const cache = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)();
+    if (!cache)
+        return;
+    const updatedAt = Date.now();
+    (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .writeGuideCache */ .qZ)({
+        ...cache,
+        channels: cache.channels.map((candidate) => candidate.id === channel.id
+            ? { ...candidate, programs, loadedAll, updatedAt }
+            : candidate),
+    });
+}
+// TODO: Validate
+async function syncGuideCache(force = false) {
+    const watched = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readWatched */ .vj)();
+    await markWatchedInSiteCache(watched);
+    const client = await loadClient();
+    if (!client)
+        return;
+    const previous = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)();
+    const channels = newerChannels(buildGuide(client), previous?.channels ?? []).map((channel) => ({
+        ...channel,
+        programs: withWatched(channel.programs, watched),
+    }));
+    const favorites = favoriteChannelIds(client);
+    const keepFavorites = previous?.favoriteIds !== undefined &&
+        (favorites === null ||
+            (previous.favoritesUpdatedAt ?? 0) > favorites.updatedAt);
+    const favoriteIds = keepFavorites
+        ? (previous?.favoriteIds ?? [])
+        : (favorites?.ids ?? []);
+    const favoritesUpdatedAt = keepFavorites
+        ? previous?.favoritesUpdatedAt
+        : favorites?.updatedAt;
+    if (!force &&
+        previous &&
+        JSON.stringify([previous.channels, previous.favoriteIds ?? []]) ===
+            JSON.stringify([channels, favoriteIds]))
+        return;
+    (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .writeGuideCache */ .qZ)({
+        channels,
+        favoriteIds,
+        favoritesUpdatedAt,
+        fetchedAt: Date.now(),
+    });
+}
+// TODO: Validate
+function startGuideSync() {
+    if (window.top !== window)
+        return;
+    const sync = (force = false) => {
+        syncGuideCache(force).catch((error) => console.warn("[Stream Channeler Remote] Couldn't read the site cache:", error));
+    };
+    sync();
+    window.setInterval(() => sync(), SYNC_MS);
+    GM_addValueChangeListener(_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .GUIDE_SYNC_REQUEST_KEY */ .ZG, () => sync(true));
+}
+// TODO: Validate
+async function guideChannelFromApi(item, watched) {
+    const randomSeed = Math.floor(Math.random() * 2 ** 31);
+    const dvr = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchDvrChannel */ .qK)(item.id, randomSeed);
+    const order = defaultQuery(item);
+    return {
+        id: item.id,
+        name: item.custom_name ?? item.name ?? dvr.name,
+        number: item.custom_channel_number ?? dvr.number,
+        query: order ? { ...order, randomSeed } : null,
+        loadedAll: dvr.programs.length < _dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PREVIEW_LIMIT */ .FZ,
+        updatedAt: Date.now(),
+        fromApi: true,
+        programs: withWatched(dvr.programs.map((program) => ({
+            ...program,
+            thumbnail_url: (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(program.thumbnail_url),
+            favicon_url: (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .apiAssetUrl */ .yT)(program.favicon_url),
+        })), watched),
+    };
+}
+// TODO: Validate
+async function addApiChannels(items, favoriteIds) {
+    const known = new Set((0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)()?.channels.map(({ id }) => id) ?? []);
+    const watched = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readWatched */ .vj)();
+    const loaded = await Promise.allSettled(items
+        .filter((item) => !known.has(item.id))
+        .map((item) => guideChannelFromApi(item, watched)));
+    const added = loaded.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+    const cache = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)() ?? { channels: [], fetchedAt: Date.now() };
+    const present = new Set(cache.channels.map(({ id }) => id));
+    (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .writeGuideCache */ .qZ)({
+        ...cache,
+        channels: [
+            ...cache.channels,
+            ...added.filter((channel) => !present.has(channel.id)),
+        ],
+        ...(favoriteIds && { favoriteIds, favoritesUpdatedAt: Date.now() }),
+    });
+    return added.filter((channel) => channel.programs.length > 0).length;
+}
+// TODO: Validate
+async function loadMorePublicChannels() {
+    for (let attempt = 0; attempt < PUBLIC_PAGE_ATTEMPTS; attempt++) {
+        const page = GM_getValue(_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PUBLIC_PAGE_KEY */ .i5, 0);
+        const items = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchPublicChannels */ .k)(page);
+        if (items.length === 0)
+            return null;
+        GM_setValue(_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .PUBLIC_PAGE_KEY */ .i5, page + 1);
+        const added = await addApiChannels(items);
+        if (added > 0)
+            return added;
+    }
+    return 0;
+}
+// TODO: Validate
+async function loadFavoriteChannels() {
+    const items = await (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchFavoriteChannels */ .NJ)();
+    await addApiChannels(items, items.map(({ id }) => id));
+}
+// TODO: Validate
+async function fillChannelNames() {
+    const missing = ((0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)()?.channels ?? []).filter((channel) => !channel.name && !namesRequested.has(channel.id));
+    if (missing.length === 0)
+        return;
+    for (const channel of missing)
+        namesRequested.add(channel.id);
+    const loaded = await Promise.allSettled(missing.map((channel) => (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .fetchChannel */ .G1)(channel.id)));
+    const found = new Map();
+    loaded.forEach((result, index) => {
+        const { id } = missing[index];
+        if (result.status === "fulfilled" && result.value.name) {
+            found.set(id, result.value);
+        }
+        else if (result.status === "rejected") {
+            namesRequested.delete(id);
+        }
+    });
+    const cache = (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .readGuideCache */ .j_)();
+    if (!cache || found.size === 0)
+        return;
+    (0,_dvr_api__WEBPACK_IMPORTED_MODULE_0__/* .writeGuideCache */ .qZ)({
+        ...cache,
+        channels: cache.channels.map((channel) => {
+            const named = found.get(channel.id);
+            return named && !channel.name
+                ? {
+                    ...channel,
+                    name: named.name,
+                    number: channel.number ?? named.channel_number,
+                }
+                : channel;
+        }),
+    });
 }
 
 
@@ -3339,376 +5509,257 @@ var __webpack_exports__ = {};
 (() => {
 "use strict";
 
-// EXTERNAL MODULE: ./src/shared.ts
-var shared = __webpack_require__("./src/shared.ts");
-;// ./src/custom_channel.ts
-// TODO: Validate
-
-const log = (0,shared/* createLogger */.h)("Custom Channel");
-const URLS_KEY = "customChannelUrls";
-let running = false;
-let stoppedByTab = false;
-let currentIndex = 0;
-// TODO: Validate
-let isCardRemoteRunning = () => false;
-// TODO: Validate
-function storedUrls() {
-    return GM_getValue(URLS_KEY, []);
-}
-// TODO: Validate
-function promptForUrls() {
-    if (document.getElementById("custom-channel-dialog"))
-        return;
-    const overlay = document.createElement("div");
-    overlay.id = "custom-channel-dialog";
-    overlay.style.cssText =
-        "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);font-family:system-ui,sans-serif;";
-    const panel = document.createElement("div");
-    panel.style.cssText =
-        "display:flex;flex-direction:column;gap:10px;width:min(700px,90vw);padding:16px;border-radius:8px;background:#1c252f;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.5);";
-    const label = document.createElement("label");
-    label.textContent = "URLs to play as a channel, in order (one per line):";
-    label.style.cssText = "font-size:14px;";
-    const textarea = document.createElement("textarea");
-    textarea.value = storedUrls().join("\n");
-    textarea.rows = 15;
-    textarea.spellcheck = false;
-    textarea.style.cssText =
-        "width:100%;box-sizing:border-box;padding:8px;border-radius:4px;border:1px solid #3a4a5c;background:#0f151b;color:#fff;font-family:monospace;font-size:13px;resize:vertical;";
-    const buttons = document.createElement("div");
-    buttons.style.cssText = "display:flex;justify-content:flex-end;gap:8px;";
-    const button = (text, onClick) => {
-        const el = document.createElement("button");
-        el.type = "button";
-        el.textContent = text;
-        el.style.cssText =
-            "padding:6px 16px;border-radius:4px;border:1px solid #3a4a5c;background:#2a3846;color:#fff;font-size:14px;cursor:pointer;";
-        el.addEventListener("click", onClick);
-        return el;
-    };
-    const close = () => overlay.remove();
-    const save = () => {
-        const urls = textarea.value
-            .split("\n")
-            .map((url) => url.trim())
-            .filter((url) => url.length > 0);
-        GM_setValue(URLS_KEY, urls);
-        log.log(`Saved ${urls.length} URLs`);
-        close();
-    };
-    overlay.addEventListener("click", (event) => {
-        if (event.target === overlay)
-            close();
-    });
-    overlay.addEventListener("keydown", (event) => {
-        if (event.key === "Escape")
-            close();
-    });
-    buttons.append(button("Cancel", close), button("Save", save));
-    panel.append(label, textarea, buttons);
-    overlay.append(panel);
-    document.body.append(overlay);
-    textarea.focus();
-}
-// TODO: Validate
-function openCurrentUrl() {
-    const urls = storedUrls();
-    if (currentIndex >= urls.length) {
-        log.log(`Finished all ${urls.length} URLs`);
-        running = false;
-        return;
-    }
-    const url = urls[currentIndex];
-    log.log(`Opening ${currentIndex + 1}/${urls.length}:`, url);
-    GM_setValue("loadingTab", true);
-    GM_setValue("loadingUrl", url);
-    window.open(url, "_blank");
-}
-// TODO: Validate
-function toggleCustomChannel() {
-    stoppedByTab = false;
-    if (running) {
-        running = false;
-        log.log("Stopped");
-        return;
-    }
-    if (isCardRemoteRunning()) {
-        window.alert("Stop the channel's remote before starting a custom channel.");
-        return;
-    }
-    if (storedUrls().length === 0) {
-        window.alert("Set the custom channel URLs first.");
-        return;
-    }
-    running = true;
-    currentIndex = 0;
-    openCurrentUrl();
-}
-// TODO: Validate
-function initCustomChannel(cardRemoteRunning) {
-    isCardRemoteRunning = cardRemoteRunning;
-    (0,shared/* addMenuCommand */.iq)("start", "Start/stop custom channel", toggleCustomChannel);
-    (0,shared/* addMenuCommand */.iq)("builder", "Set custom channel URLs", promptForUrls);
-    GM_addValueChangeListener("videoEnded", () => {
-        if (!running)
-            return;
-        if (isCardRemoteRunning()) {
-            running = false;
-            return;
-        }
-        currentIndex++;
-        openCurrentUrl();
-    });
-    GM_addValueChangeListener("previousEpisodeRequested", () => {
-        if (!running)
-            return;
-        if (isCardRemoteRunning()) {
-            running = false;
-            return;
-        }
-        currentIndex = Math.max(0, currentIndex - 1);
-        openCurrentUrl();
-    });
-    GM_addValueChangeListener("remoteStopRequested", () => {
-        if (!running)
-            return;
-        stoppedByTab = true;
-        running = false;
-    });
-    GM_addValueChangeListener("remoteResumeRequested", () => {
-        if (!stoppedByTab || running)
-            return;
-        stoppedByTab = false;
-        running = true;
-    });
-}
-
-;// ./src/playback.ts
-// TODO: Validate
-
-const playback_log = (0,shared/* createLogger */.h)();
-let cards = [];
-let playback_currentIndex = 0;
-let playback_running = false;
-let listenerRegistered = false;
-let playback_stoppedByTab = false;
-function promptSetCurrentIndex() {
-    const input = window.prompt(`Set current episode (1-${cards.length}):`, String(playback_currentIndex + 1));
-    if (input === null)
-        return;
-    const parsed = parseInt(input, 10);
-    if (!Number.isInteger(parsed) || parsed < 1 || parsed > cards.length)
-        return;
-    playback_currentIndex = parsed - 1;
-    updateButton();
-}
-function handleButtonClick(event) {
-    const target = event.target;
-    if (target.closest("#remote-control-counter")) {
-        event.preventDefault();
-        promptSetCurrentIndex();
-        return;
-    }
-    toggleRemote();
-}
-function updateButton() {
-    let button = document.getElementById("remote-control-btn");
-    if (!/^\/channels\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(location.pathname)) {
-        button?.remove();
-        return;
-    }
-    if (!button) {
-        // Place the button right after the "Comments" button in the channel toolbar,
-        // matching its styling.
-        const commentsButton = Array.from(document.querySelectorAll("button")).find((b) => b.querySelector("svg.lucide-message-square") &&
-            b.textContent.trim() === "Comments");
-        if (!commentsButton?.parentElement)
-            return;
-        button = document.createElement("button");
-        button.id = "remote-control-btn";
-        button.className = commentsButton.className;
-        button.setAttribute("data-slot", "button");
-        button.addEventListener("click", handleButtonClick);
-        commentsButton.after(button);
-    }
-    // Icons: https://lucide.dev/icons/monitor-x and
-    // https://lucide.dev/icons/monitor-play
-    const icon = playback_running
-        ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-x-icon lucide-monitor-x"><path d="m14.5 12.5-5-5"/><path d="m9.5 12.5 5-5"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>`
-        : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-monitor-play-icon lucide-monitor-play"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"/><path d="M12 17v4"/><path d="M8 21h8"/><rect x="2" y="3" width="20" height="14" rx="2"/></svg>`;
-    const action = playback_running ? "Stop Remote" : "Start Remote";
-    // Shown 1-based: the episode that's playing, or that Start Remote will play
-    // next. Capped at the last episode once the channel has finished.
-    const displayed = Math.min(playback_currentIndex + 1, cards.length);
-    const counter = `<span id="remote-control-counter" style="cursor:pointer;text-decoration:underline">${displayed}/${cards.length}</span>`;
-    button.innerHTML = `${icon}${action} (${counter})`;
-}
-function clickCurrentCard() {
-    // If all videos have been played stop remote.
-    if (playback_currentIndex >= cards.length) {
-        stopRemote();
-        return;
-    }
-    // loadingTab is used to make sure the script only activates on the specific tabs
-    // that it opens.
-    // TODO: This isn't a perfectly safe way of tracking this because the user could
-    // trigger a race condition if they open a tab to a video at the same time as the
-    // script opens a video.
-    GM_setValue("loadingTab", true);
-    // Remember where the tab is headed, for plugins that get bounced elsewhere
-    // first (e.g. Netflix's profile picker) and need to find their way back.
-    const card = cards[playback_currentIndex];
-    const link = card.querySelector("a[href]") ??
-        card.closest("a[href]");
-    GM_setValue("loadingUrl", link?.href ?? null);
-    if (!link)
-        captureOpenedUrl();
-    card.click();
-    updateButton();
-}
-// Cards without a plain link open their video from script, so record the URL
-// they open (via window.open or a clicked link) as loadingUrl.
-function captureOpenedUrl() {
-    const page = unsafeWindow;
-    const originalOpen = page.open;
-    let captured = false;
-    const record = (url) => {
-        if (captured)
-            return;
-        captured = true;
-        playback_log.log("Card opened", url);
-        GM_setValue("loadingUrl", url);
-    };
-    const patchedOpen = (url, ...rest) => {
-        if (url)
-            record(new URL(String(url), location.href).href);
-        return originalOpen.call(page, url, ...rest);
-    };
-    // Firefox keeps the page's globals behind Xray wrappers, so the patch has to
-    // be exported into the page to be callable from it.
-    page.open =
-        typeof exportFunction === "function"
-            ? exportFunction(patchedOpen, page)
-            : patchedOpen;
-    const onClick = (event) => {
-        const anchor = event.target?.closest?.("a[href]");
-        if (anchor instanceof HTMLAnchorElement)
-            record(anchor.href);
-    };
-    document.addEventListener("click", onClick, true);
-    // The card may open the tab after an await, so keep listening for a moment.
-    window.setTimeout(() => {
-        page.open = originalOpen;
-        document.removeEventListener("click", onClick, true);
-        if (!captured) {
-            playback_log.warn("Couldn't tell which URL the card opened");
-        }
-    }, 3000);
-}
-function stopRemote() {
-    playback_running = false;
-    updateButton();
-}
-// TODO: Validate
-function startRemote() {
-    if (cards.length === 0) {
-        cards = Array.from(document.querySelectorAll('[data-slot="card"]'));
-        playback_currentIndex = 0;
-    }
-    playback_log.log(`Starting at ${playback_currentIndex + 1}/${cards.length}`);
-    playback_running = true;
-    // Listener to detect for when a video is completed.
-    if (!listenerRegistered) {
-        listenerRegistered = true;
-        GM_addValueChangeListener("videoEnded", (_name, _oldValue, newValue) => {
-            // Only automatically load the next channel if Stream Channeler Remote is in
-            // an active state.
-            if (!playback_running)
-                return;
-            if (typeof newValue !== "number")
-                throw new Error(`videoEnded value is not a number: ${newValue}`);
-            playback_currentIndex++;
-            clickCurrentCard();
-        });
-        GM_addValueChangeListener("previousEpisodeRequested", () => {
-            if (!playback_running)
-                return;
-            playback_currentIndex = Math.max(0, playback_currentIndex - 1);
-            clickCurrentCard();
-        });
-    }
-    clickCurrentCard();
-}
-// TODO: Validate
-function toggleRemote() {
-    playback_stoppedByTab = false;
-    if (playback_running) {
-        stopRemote();
-    }
-    else {
-        startRemote();
-    }
-}
-// TODO: Validate
-function isRemoteRunning() {
-    return playback_running;
-}
-// TODO: Validate
-function initPlayback() {
-    // A video tab's "Stop Auto Control" button sets this; stop the remote so the
-    // Start/Stop Remote button reflects it.
-    GM_addValueChangeListener("remoteStopRequested", () => {
-        if (!playback_running)
-            return;
-        playback_stoppedByTab = true;
-        stopRemote();
-    });
-    GM_addValueChangeListener("remoteResumeRequested", () => {
-        if (!playback_stoppedByTab || playback_running)
-            return;
-        playback_stoppedByTab = false;
-        playback_running = true;
-        updateButton();
-    });
-    function syncState() {
-        const newCards = Array.from(document.querySelectorAll('[data-slot="card"]'));
-        // The user can remove cards (by verifying a watch) or changing card order (by
-        // clicking the "Next Episode" button) so these changes need to be managed.
-        if (newCards.length !== cards.length ||
-            !newCards.every((c, i) => c === cards[i])) {
-            const activeCard = cards[playback_currentIndex];
-            cards = newCards;
-            if (activeCard) {
-                const newIndex = cards.indexOf(activeCard);
-                playback_currentIndex = newIndex >= 0 ? newIndex : 0;
-                // No activeCard can probably occur when the user verifies a watch on the last
-                // episode of a
-                // channel probably.
-            }
-            else {
-                playback_currentIndex = 0;
-            }
-        }
-        updateButton();
-    }
-    let debounceTimer;
-    new MutationObserver(() => {
-        clearTimeout(debounceTimer);
-        debounceTimer = window.setTimeout(syncState, 200);
-    }).observe(document.body, { childList: true, subtree: true });
-    // Clean up just in case when tab is closed to avoid the script from activating on a
-    // tab that is opened later on.
-    window.addEventListener("beforeunload", () => {
-        if (cards.length > 0) {
-            GM_setValue("loadingTab", false);
-        }
-    });
-}
-
 // EXTERNAL MODULE: ./src/manage.ts
 var manage = __webpack_require__("./src/manage.ts");
+// EXTERNAL MODULE: ./src/dvr.ts + 1 modules
+var dvr = __webpack_require__("./src/dvr.ts");
+// EXTERNAL MODULE: ./src/site_cache.ts
+var site_cache = __webpack_require__("./src/site_cache.ts");
+// EXTERNAL MODULE: ./src/remote.ts
+var remote = __webpack_require__("./src/remote.ts");
+// EXTERNAL MODULE: ./src/shared.ts
+var shared = __webpack_require__("./src/shared.ts");
+;// ./src/settings_panel.ts
+// TODO: Validate
+
+
+
+const log = (0,shared/* createLogger */.h)();
+const NETFLIX_NAME_KEY = "netflixProfileName";
+const NETFLIX_PIN_KEY = "netflixProfilePin";
+const PANEL_ID = "stream-channeler-remote-settings";
+const PANEL_CSS = `
+:host {
+  all: initial;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --card: #171717;
+  --border: #303030;
+  --foreground: #fafafa;
+  --muted: #a3a3a3;
+  --primary: #14b8a6;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: 16px;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  font: 14px system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+h1 {
+  margin: 0;
+  font-size: 16px;
+}
+h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+input[type="text"],
+textarea {
+  flex: 1;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+}
+textarea {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.row {
+  display: flex;
+  gap: 8px;
+}
+button {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #262626;
+  color: var(--foreground);
+  font: inherit;
+  cursor: pointer;
+}
+header button {
+  flex: none;
+}
+button:hover {
+  border-color: var(--primary);
+}
+.status {
+  margin: 0;
+  color: var(--muted);
+}
+`;
+// TODO: Validate
+function el(tag, className, ...children) {
+    const element = document.createElement(tag);
+    if (className)
+        element.className = className;
+    element.append(...children);
+    return element;
+}
+// TODO: Validate
+function settings_panel_button(text, onClick) {
+    const element = el("button", undefined, text);
+    element.type = "button";
+    element.addEventListener("click", onClick);
+    return element;
+}
+// TODO: Validate
+function describe(state) {
+    if (state.mode === null)
+        return "Nothing is playing.";
+    const status = (0,remote/* isRunning */.W_)(state) ? "Playing" : "Stopped";
+    if (state.mode === "dvr") {
+        return `${status}: ${state.dvr?.channelName || "DVR"}`;
+    }
+    const source = state.mode === "remote" ? "Channel" : "Custom channel";
+    return `${status}: ${source}, episode ${Math.min(state.index + 1, state.queue.length)} of ${state.queue.length}`;
+}
+// TODO: Validate
+function settings_panel_checkbox(text, key) {
+    const input = el("input");
+    input.type = "checkbox";
+    input.checked = GM_getValue(key, true);
+    input.addEventListener("change", () => GM_setValue(key, input.checked));
+    return el("label", undefined, input, text);
+}
+// TODO: Validate
+function textField(text, key, numeric = false) {
+    const input = el("input");
+    input.type = "text";
+    if (numeric)
+        input.inputMode = "numeric";
+    input.value = GM_getValue(key, "");
+    input.addEventListener("change", () => GM_setValue(key, input.value.trim()));
+    return el("label", undefined, text, input);
+}
+// TODO: Validate
+function applyStyles(root) {
+    try {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(PANEL_CSS);
+        root.adoptedStyleSheets = [sheet];
+    }
+    catch {
+        const style = document.createElement("style");
+        style.textContent = PANEL_CSS;
+        root.prepend(style);
+    }
+}
+// TODO: Validate
+function openSettingsPanel() {
+    if (document.getElementById(PANEL_ID))
+        return;
+    const host = document.createElement("div");
+    host.id = PANEL_ID;
+    const root = host.attachShadow({ mode: "open" });
+    applyStyles(root);
+    const closeOnEscape = (event) => {
+        if (event.key !== "Escape")
+            return;
+        event.stopPropagation();
+        close();
+    };
+    const close = () => {
+        host.remove();
+        clearInterval(statusPoll);
+        window.removeEventListener("keydown", closeOnEscape, true);
+    };
+    const status = el("p", "status");
+    const renderStatus = () => {
+        status.textContent = describe((0,remote/* loadState */.C7)());
+    };
+    renderStatus();
+    const statusPoll = window.setInterval(() => {
+        if (!host.isConnected) {
+            clearInterval(statusPoll);
+            return;
+        }
+        renderStatus();
+    }, 1000);
+    const textarea = el("textarea");
+    textarea.id = "custom-urls";
+    textarea.rows = 6;
+    textarea.spellcheck = false;
+    textarea.value = GM_getValue(remote/* CUSTOM_URLS_KEY */.tc, []).join("\n");
+    const customUrls = () => textarea.value
+        .split("\n")
+        .map((url) => url.trim())
+        .filter((url) => url.length > 0);
+    textarea.addEventListener("change", () => GM_setValue(remote/* CUSTOM_URLS_KEY */.tc, customUrls()));
+    const customLabel = el("label", undefined, "URLs to play in order, one per line");
+    customLabel.htmlFor = "custom-urls";
+    const panel = el("main", undefined, el("header", undefined, el("h1", undefined, "Stream Channeler Remote"), settings_panel_button("Close", close)), el("section", undefined, status, el("div", "row", settings_panel_button("Open guide", () => {
+        close();
+        (0,dvr/* openDvrGuide */.Fc)(log);
+    }), settings_panel_button("Stop", () => void (0,remote/* send */.tN)({ type: "remote:stop" })))), el("section", undefined, el("h2", undefined, "Playback"), settings_panel_checkbox("Skip intros", remote/* SKIP_INTROS_KEY */.o1), settings_panel_checkbox("Skip credits", remote/* SKIP_CREDITS_KEY */.HA), settings_panel_checkbox("Always show guide button", remote/* ALWAYS_SHOW_GUIDE_KEY */.j8)), el("section", undefined, el("h2", undefined, "Netflix profile"), textField("Profile name", NETFLIX_NAME_KEY), textField("PIN", NETFLIX_PIN_KEY, true)), el("section", undefined, el("h2", undefined, "Custom channel"), customLabel, textarea, el("div", "row", settings_panel_button("Play custom channel", () => {
+        const urls = customUrls();
+        GM_setValue(remote/* CUSTOM_URLS_KEY */.tc, urls);
+        if (urls.length === 0)
+            return;
+        close();
+        void (0,remote/* send */.tN)({ type: "custom:start", urls });
+    }))));
+    host.addEventListener("click", (event) => {
+        if (event.composedPath()[0] === host)
+            close();
+    });
+    host.addEventListener("keydown", (event) => event.stopPropagation());
+    window.addEventListener("keydown", closeOnEscape, true);
+    root.append(panel);
+    document.body.append(host);
+}
+
 ;// ./src/index.ts
 // TODO: Validate
+
 
 
 
@@ -3716,20 +5767,55 @@ var manage = __webpack_require__("./src/manage.ts");
 function loadPlugins(ctx) {
     return ctx.keys().map((key) => ctx(key));
 }
-const playbackPlugin = loadPlugins(__webpack_require__("./src/playback sync recursive \\/index\\.ts$")).find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
-const managePlugin = loadPlugins(__webpack_require__("./src/manage sync recursive \\/index\\.ts$")).find((p) => p.hostnames.some((h) => location.hostname.includes(h)));
-(0,shared/* registerSkipMenus */.V_)();
-if (playbackPlugin)
-    playbackPlugin.init();
-if (managePlugin)
-    managePlugin.init();
-if (!playbackPlugin && !managePlugin) {
-    if (location.hostname.includes("streamchanneler.com")) {
-        initPlayback();
-        initCustomChannel(isRemoteRunning);
-        (0,manage/* initManage */.Ad)();
+// TODO: Validate
+function matchesPage(patterns) {
+    return patterns.some((pattern) => new RegExp(`^${pattern
+        .split("*")
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+        .join(".*")}$`).test(location.href));
+}
+// TODO: Validate
+function findPlugin(plugins) {
+    return plugins.find((p) => p.hostnames.some((h) => location.hostname.includes(h)) &&
+        matchesPage(p.matches));
+}
+const playbackPlugin = findPlugin(loadPlugins(__webpack_require__("./src/playback sync recursive \\/index\\.ts$")));
+const managePlugin = findPlugin(loadPlugins(__webpack_require__("./src/manage sync recursive \\/index\\.ts$")));
+if (window.top === window) {
+    (0,shared/* addMenuCommand */.iq)("start", "Open guide", () => {
+        (0,dvr/* openDvrGuide */.Fc)((0,shared/* createLogger */.h)("Guide"));
+    });
+    (0,shared/* addMenuCommand */.iq)("settings", "Settings", openSettingsPanel);
+}
+// TODO: Validate
+function onDomReady(run) {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", run, { once: true });
+    }
+    else {
+        run();
     }
 }
+onDomReady(() => {
+    const isApp = typeof STREAM_CHANNELER_APP !== "undefined";
+    const isStreamChanneler = location.hostname.includes("streamchanneler.com");
+    if (playbackPlugin)
+        playbackPlugin.init();
+    if (managePlugin && !isApp)
+        managePlugin.init();
+    if (isStreamChanneler) {
+        (0,dvr/* storeDvrToken */.$c)();
+        (0,dvr/* bridgeDvrPage */.$S)();
+        (0,site_cache/* startGuideSync */.YE)();
+        if (!isApp)
+            (0,manage/* initManage */.Ad)();
+        (0,dvr/* mountSiteGuideLink */.DE)((0,shared/* createLogger */.h)("Guide"));
+        if (window.top === window && location.hash === "#guide") {
+            (0,dvr/* openDvrGuide */.Fc)((0,shared/* createLogger */.h)("Guide"));
+        }
+    }
+});
+(0,dvr/* resumeDvrGuide */.s2)((0,shared/* createLogger */.h)("Guide"));
 
 })();
 
