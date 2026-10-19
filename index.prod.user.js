@@ -1,47 +1,10 @@
 // ==UserScript==
 // @name          Stream Channeler Remote
 // @namespace     https://streamchanneler.com/
-// @version       0.0.2
+// @version       0.0.6
 // @author        ryn.cx
 // @description   Companion for Stream Channeler that controls media playback and assists in channel creation.
-// @match         https://streamchanneler.com/*
-// @match         https://www.adultswim.com/videos/*
-// @match         https://www.amazon.com/gp/video/*
-// @match         https://www.crunchyroll.com/watch/*
-// @match         https://www.disneyplus.com/*/play/*
-// @match         https://play.hbomax.com/video/watch/*
-// @match         https://play.hbomax.com/movie/*
-// @match         https://www.hidive.com/video/*
-// @match         https://www.hidive.com/stream/*
-// @match         https://www.hulu.com/watch/*
-// @match         https://www3.nhk.or.jp/nhkworld/en/shows/*
-// @match         https://www.netflix.com/*
-// @match         https://www.paramountplus.com/shows/video/*
-// @match         https://www.paramountplus.com/movies/video/*
-// @match         https://www.peacocktv.com/watch/*
-// @match         https://pluto.tv/*/on-demand/*
-// @match         https://pluto.tv/*/live-tv/*
-// @match         https://therokuchannel.roku.com/watch/*
-// @match         https://tubitv.com/movies/*
-// @match         https://tubitv.com/tv-shows/*
-// @match         https://tubitv.com/series/*
-// @match         https://www.youtube.com/watch*
-// @match         https://www.adultswim.com/*
-// @match         https://www.primevideo.com/*
-// @match         https://www.crunchyroll.com/*
-// @match         https://www.disneyplus.com/*
-// @match         https://play.hbomax.com/*
-// @match         https://www.hbomax.com/*
-// @match         https://www.hidive.com/*
-// @match         https://www.hulu.com/*
-// @match         https://www3.nhk.or.jp/nhkworld/*
-// @match         https://www.paramountplus.com/*
-// @match         https://www.peacocktv.com/*
-// @match         https://pluto.tv/*
-// @match         https://therokuchannel.roku.com/*
-// @match         https://www.themoviedb.org/*
-// @match         https://tubitv.com/*
-// @match         https://www.youtube.com/*
+// @match         *://*/*
 // @source        https://github.com/ryn-cx/stream-channeler-remote
 // @grant         GM_setValue
 // @grant         GM_getValue
@@ -242,7 +205,7 @@ const GUIDE_CSS = `
 }
 .head .label { background: #262626; font-weight: 600; }
 .number { color: #a3a3a3; font-variant-numeric: tabular-nums; }
-.name { font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.name { min-height: 2.8em; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 a.name { color: inherit; text-decoration: none; }
 a.name:hover, a.name:focus-visible { color: #14b8a6; text-decoration: underline; outline: none; }
 .tag { display: block; font-size: 12px; color: #14b8a6; }
@@ -255,7 +218,7 @@ a.name:hover, a.name:focus-visible { color: #14b8a6; text-decoration: underline;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-.track { position: relative; height: 64px; }
+.track { position: relative; min-height: 64px; }
 .program {
   position: absolute;
   top: 6px;
@@ -784,6 +747,12 @@ function createNativeGuide(options) {
             const link = el("a", "name", favorite && el("span", "star", "★ "), channel.name ?? "Untitled channel");
             link.href = `https://streamchanneler.com/channels/${encodeURIComponent(channel.id)}`;
             link.title = "Open this channel on Stream Channeler";
+            link.addEventListener("mouseenter", () => {
+                link.title =
+                    link.scrollHeight > link.clientHeight
+                        ? (channel.name ?? "Untitled channel")
+                        : "Open this channel on Stream Channeler";
+            });
             if (!location.hostname.endsWith("streamchanneler.com")) {
                 link.target = "_blank";
                 link.rel = "noopener";
