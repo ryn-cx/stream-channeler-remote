@@ -160,7 +160,7 @@ class TabManager(
                 hasUserGesture: Boolean,
             ) {
                 tab.url = url
-                tab.guideOpen = false
+                tab.guideOpen = url?.substringAfter('#', "") == "guide"
                 tab.settingsOpen = false
             }
 

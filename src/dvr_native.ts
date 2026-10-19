@@ -10,7 +10,11 @@ import {
   requestGuideSync,
 } from "./dvr_api";
 import type { Logger } from "./shared";
-import { loadChannelEpisodes } from "./site_cache";
+import {
+  loadChannelEpisodes,
+  loadFavoriteChannels,
+  loadMorePublicChannels,
+} from "./site_cache";
 
 const PIXELS_PER_MINUTE = 6;
 const CHANNEL_SEED_KEY = "guideChannelSeed";
@@ -214,6 +218,8 @@ a.name:hover, a.name:focus-visible { color: #14b8a6; text-decoration: underline;
   pointer-events: none;
 }
 .message { padding: 48px 16px; text-align: center; color: #a3a3a3; }
+.load-more { display: block; width: 100%; height: 44px; margin-top: 8px; font-size: 15px; }
+.load-more:disabled { cursor: default; opacity: 0.6; }
 `;
 
 interface Program {
@@ -385,16 +391,35 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
   });
   const favorites = el("button", "action", "★ Favorites");
   favorites.type = "button";
+  let favoritesStatus: "idle" | "loading" | "failed" = "idle";
   const styleFavorites = (): void => {
     const on = GM_getValue(FAVORITES_ONLY_KEY, false);
     favorites.className = on ? "action on" : "action";
     favorites.setAttribute("aria-pressed", String(on));
+    favorites.textContent =
+      favoritesStatus === "loading"
+        ? "★ Loading…"
+        : favoritesStatus === "failed"
+          ? "★ Favorites (couldn't load)"
+          : "★ Favorites";
   };
   styleFavorites();
   favorites.addEventListener("click", () => {
-    GM_setValue(FAVORITES_ONLY_KEY, !GM_getValue(FAVORITES_ONLY_KEY, false));
+    const on = !GM_getValue(FAVORITES_ONLY_KEY, false);
+    GM_setValue(FAVORITES_ONLY_KEY, on);
+    favoritesStatus = on ? "loading" : "idle";
     styleFavorites();
     if (cache) renderGuide(cache);
+    if (!on) return;
+    loadFavoriteChannels()
+      .then(() => {
+        favoritesStatus = "idle";
+      })
+      .catch((error: unknown) => {
+        log.warn("Couldn't load favorite channels:", error);
+        favoritesStatus = "failed";
+      })
+      .finally(styleFavorites);
   });
   const close = el("button", "action", "Close");
   close.type = "button";
@@ -434,14 +459,67 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
   pageRight.title = "Later";
   const hThumb = el("div", "hbar-thumb");
   const hTrack = el("div", "hbar-track", hThumb);
-  const hbar = el("div", "hbar", pageLeft, hTrack, pageRight);
+  const pageUp = el("button", "action page", "▲");
+  pageUp.type = "button";
+  pageUp.title = "Previous channels";
+  const pageDown = el("button", "action page", "▼");
+  pageDown.type = "button";
+  pageDown.title = "Next channels";
+  const loadMore = el("button", "action load-more", "Load more channels");
+  loadMore.type = "button";
+  let moreStatus: "idle" | "loading" | "failed" | "done" = "idle";
+
+  // TODO: Validate
+  function styleLoadMore(): void {
+    loadMore.disabled = moreStatus === "loading" || moreStatus === "done";
+    loadMore.textContent = {
+      idle: "Load more channels",
+      loading: "Loading more channels…",
+      failed: "Couldn't load more channels, retry",
+      done: "No more channels",
+    }[moreStatus];
+  }
+
+  // TODO: Validate
+  function loadMoreChannels(): void {
+    if (moreStatus === "loading" || moreStatus === "done") return;
+    moreStatus = "loading";
+    styleLoadMore();
+    updateScrollbar();
+    loadMorePublicChannels()
+      .then((added) => {
+        moreStatus = added === null ? "done" : "idle";
+      })
+      .catch((error: unknown) => {
+        log.warn("Couldn't load more channels:", error);
+        moreStatus = "failed";
+      })
+      .finally(() => {
+        styleLoadMore();
+        updateScrollbar();
+      });
+  }
+
+  loadMore.addEventListener("click", loadMoreChannels);
+  const hbar = el("div", "hbar", pageLeft, hTrack, pageRight, pageUp, pageDown);
   hbar.hidden = true;
   let grid: HTMLElement | null = null;
 
   // TODO: Validate
   function updateScrollbar(): void {
     const max = grid ? grid.scrollWidth - grid.clientWidth : 0;
-    hbar.hidden = !grid || max <= 0;
+    const maxTop = content.scrollHeight - content.clientHeight;
+    hbar.hidden = !grid;
+    const atBottom = content.scrollTop >= maxTop - 1;
+    pageUp.disabled = content.scrollTop <= 0;
+    pageDown.disabled =
+      atBottom &&
+      (GM_getValue(FAVORITES_ONLY_KEY, false) ||
+        moreStatus === "loading" ||
+        moreStatus === "done");
+    hTrack.style.visibility = max > 0 ? "visible" : "hidden";
+    pageLeft.disabled = max <= 0;
+    pageRight.disabled = max <= 0;
     if (!grid || max <= 0) return;
     const trackWidth = hTrack.clientWidth;
     const thumbWidth = Math.max(
@@ -463,6 +541,26 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
     });
   }
 
+  // TODO: Validate
+  function pageVertically(direction: number): void {
+    const maxTop = content.scrollHeight - content.clientHeight;
+    if (
+      direction > 0 &&
+      content.scrollTop >= maxTop - 1 &&
+      !GM_getValue(FAVORITES_ONLY_KEY, false)
+    ) {
+      loadMoreChannels();
+      return;
+    }
+    content.scrollBy({
+      top: direction * content.clientHeight * 0.8,
+      behavior: "smooth",
+    });
+  }
+
+  pageUp.addEventListener("click", () => pageVertically(-1));
+  pageDown.addEventListener("click", () => pageVertically(1));
+  content.addEventListener("scroll", updateScrollbar, { passive: true });
   pageLeft.addEventListener("click", () => pageBy(-1));
   pageRight.addEventListener("click", () => pageBy(1));
   hTrack.addEventListener("pointerdown", (event) => {
@@ -804,10 +902,11 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
             search.value.trim()
               ? "No channels match your search."
               : favoritesOnly
-                ? "No favorite channels in the cache. Open your favorites on streamchanneler.com to load them."
+                ? "No favorite channels. Sign in on streamchanneler.com to load your favorites."
                 : "No channels with programs yet.",
           )
         : grid,
+      !favoritesOnly && loadMore,
     );
     updateScrollbar();
 

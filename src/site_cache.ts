@@ -1,12 +1,17 @@
 // TODO: Validate
 import {
+  type ApiChannelListItem,
   type DvrApiChannel,
   apiAssetUrl,
   type EpisodeQuery,
   fetchChannelEpisodes,
+  fetchDvrChannel,
+  fetchFavoriteChannels,
+  fetchPublicChannels,
   GUIDE_SYNC_REQUEST_KEY,
   type DvrApiProgram,
   PREVIEW_LIMIT,
+  PUBLIC_PAGE_KEY,
   readGuideCache,
   readWatched,
   writeGuideCache,
@@ -14,6 +19,7 @@ import {
 import type { QueueItem } from "./remote";
 
 const SYNC_MS = 2000;
+const PUBLIC_PAGE_ATTEMPTS = 5;
 const SEARCH_KEYS = [
   "sortBy",
   "filter",
@@ -384,13 +390,19 @@ function newerChannels(
   const previousById = new Map(
     previous.map((channel) => [channel.id, channel]),
   );
-  return built.map((channel) => {
-    const older = previousById.get(channel.id);
-    if (!older) return channel;
-    const chosen =
-      (older.updatedAt ?? 0) > (channel.updatedAt ?? 0) ? older : channel;
-    return { ...chosen, query: channel.query ?? older.query };
-  });
+  const builtIds = new Set(built.map((channel) => channel.id));
+  return [
+    ...built.map((channel) => {
+      const older = previousById.get(channel.id);
+      if (!older) return channel;
+      const chosen =
+        (older.updatedAt ?? 0) > (channel.updatedAt ?? 0) ? older : channel;
+      return { ...chosen, query: channel.query ?? older.query };
+    }),
+    ...previous.filter(
+      (channel) => channel.fromApi && !builtIds.has(channel.id),
+    ),
+  ];
 }
 
 // TODO: Validate
@@ -572,4 +584,81 @@ export function startGuideSync(): void {
   sync();
   window.setInterval(() => sync(), SYNC_MS);
   GM_addValueChangeListener(GUIDE_SYNC_REQUEST_KEY, () => sync(true));
+}
+
+// TODO: Validate
+async function guideChannelFromApi(
+  item: ApiChannelListItem,
+  watched: Record<string, number>,
+): Promise<DvrApiChannel> {
+  const randomSeed = Math.floor(Math.random() * 2 ** 31);
+  const dvr = await fetchDvrChannel(item.id, randomSeed);
+  const order = defaultQuery(item as unknown as Json);
+  return {
+    id: item.id,
+    name: item.custom_name ?? item.name ?? dvr.name,
+    number: item.custom_channel_number ?? dvr.number,
+    query: order ? { ...order, randomSeed } : null,
+    loadedAll: dvr.programs.length < PREVIEW_LIMIT,
+    updatedAt: Date.now(),
+    fromApi: true,
+    programs: withWatched(
+      dvr.programs.map((program) => ({
+        ...program,
+        thumbnail_url: apiAssetUrl(program.thumbnail_url),
+        favicon_url: apiAssetUrl(program.favicon_url),
+      })),
+      watched,
+    ),
+  };
+}
+
+// TODO: Validate
+async function addApiChannels(
+  items: ApiChannelListItem[],
+  favoriteIds?: string[],
+): Promise<number> {
+  const known = new Set(readGuideCache()?.channels.map(({ id }) => id) ?? []);
+  const watched = readWatched();
+  const loaded = await Promise.allSettled(
+    items
+      .filter((item) => !known.has(item.id))
+      .map((item) => guideChannelFromApi(item, watched)),
+  );
+  const added = loaded.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+  const cache = readGuideCache() ?? { channels: [], fetchedAt: Date.now() };
+  const present = new Set(cache.channels.map(({ id }) => id));
+  writeGuideCache({
+    ...cache,
+    channels: [
+      ...cache.channels,
+      ...added.filter((channel) => !present.has(channel.id)),
+    ],
+    ...(favoriteIds && { favoriteIds, favoritesUpdatedAt: Date.now() }),
+  });
+  return added.filter((channel) => channel.programs.length > 0).length;
+}
+
+// TODO: Validate
+export async function loadMorePublicChannels(): Promise<number | null> {
+  for (let attempt = 0; attempt < PUBLIC_PAGE_ATTEMPTS; attempt++) {
+    const page = GM_getValue(PUBLIC_PAGE_KEY, 0);
+    const items = await fetchPublicChannels(page);
+    if (items.length === 0) return null;
+    GM_setValue(PUBLIC_PAGE_KEY, page + 1);
+    const added = await addApiChannels(items);
+    if (added > 0) return added;
+  }
+  return 0;
+}
+
+// TODO: Validate
+export async function loadFavoriteChannels(): Promise<void> {
+  const items = await fetchFavoriteChannels();
+  await addApiChannels(
+    items,
+    items.map(({ id }) => id),
+  );
 }

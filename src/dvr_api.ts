@@ -5,6 +5,9 @@ export const GUIDE_CACHE_KEY = "guideCache";
 export const GUIDE_SYNC_REQUEST_KEY = "guideSyncRequest";
 export const CHANNEL_ORDER_KEY = "guideChannelOrder";
 export const PREVIEW_LIMIT = 20;
+export const PUBLIC_PAGE_KEY = "guidePublicPage";
+export const PUBLIC_PAGE_SIZE = 20;
+const FAVORITES_LIMIT = 1000;
 const WATCHED_KEY = "watchedEpisodes";
 const WATCHED_LIMIT = 2000;
 
@@ -32,23 +35,32 @@ export interface DvrApiChannel {
   updatedAt?: number;
   query?: EpisodeQuery | null;
   loadedAll?: boolean;
+  fromApi?: boolean;
+}
+
+export interface ApiChannelListItem {
+  id: string;
+  name: string | null;
+  custom_name?: string | null;
+  custom_channel_number?: number | null;
+  default_order?: string | null;
 }
 
 // TODO: Validate
 function request(
   method: "GET" | "POST",
   url: string,
-  options: { auth?: boolean; body?: unknown } = {},
+  options: { auth?: boolean | "optional"; body?: unknown } = {},
 ): Promise<string> {
   const headers: Record<string, string> = {};
-  if (options.auth) {
-    const token = GM_getValue<string | null>(DVR_TOKEN_KEY, null);
+  const token = GM_getValue<string | null>(DVR_TOKEN_KEY, null);
+  if (token && options.auth) headers.Authorization = `Bearer ${token}`;
+  if (options.auth === true) {
     if (!token) {
       return Promise.reject(
         new Error("Not signed in; open streamchanneler.com to sign in"),
       );
     }
-    headers.Authorization = `Bearer ${token}`;
   }
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   return new Promise((resolve, reject) => {
@@ -100,7 +112,52 @@ export async function fetchChannelEpisodes(
       url.searchParams.append(key, String(value));
     }
   }
-  return JSON.parse(await request("GET", url.href, { auth: true })) as unknown;
+  return JSON.parse(
+    await request("GET", url.href, { auth: "optional" }),
+  ) as unknown;
+}
+
+// TODO: Validate
+async function fetchChannelList(
+  scope: "public" | "favorites",
+  offset: number,
+  limit: number,
+): Promise<ApiChannelListItem[]> {
+  const url = new URL(apiUrl("/channels"));
+  url.searchParams.set("scope", scope);
+  url.searchParams.set("offset", String(offset));
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("hide_empty", "true");
+  const response = JSON.parse(
+    await request("GET", url.href, {
+      auth: scope === "favorites" ? true : "optional",
+    }),
+  ) as { data?: ApiChannelListItem[] };
+  return response.data ?? [];
+}
+
+// TODO: Validate
+export function fetchPublicChannels(
+  page: number,
+): Promise<ApiChannelListItem[]> {
+  return fetchChannelList("public", page * PUBLIC_PAGE_SIZE, PUBLIC_PAGE_SIZE);
+}
+
+// TODO: Validate
+export function fetchFavoriteChannels(): Promise<ApiChannelListItem[]> {
+  return fetchChannelList("favorites", 0, FAVORITES_LIMIT);
+}
+
+// TODO: Validate
+export async function fetchDvrChannel(
+  channelId: string,
+  randomSeed: number,
+): Promise<DvrApiChannel> {
+  const url = new URL(apiUrl(`/channels/${encodeURIComponent(channelId)}/dvr`));
+  url.searchParams.set("randomSeed", String(randomSeed));
+  return JSON.parse(
+    await request("GET", url.href, { auth: "optional" }),
+  ) as DvrApiChannel;
 }
 
 // TODO: Validate

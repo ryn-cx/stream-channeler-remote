@@ -6,6 +6,8 @@ declare module "*.matches.cjs" {
   export const matches: string[];
 }
 
+declare const STREAM_CHANNELER_APP: true | undefined;
+
 // Tampermonkey GM_* sync API
 declare function GM_getValue<T>(key: string, defaultValue: T): T;
 declare function GM_setValue(key: string, value: unknown): void;

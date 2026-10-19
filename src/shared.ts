@@ -494,7 +494,7 @@ export function fadeWhenIdle(getElement: () => HTMLElement | null): void {
   document.addEventListener(
     "pointerout",
     (event) => {
-      if (!event.relatedTarget) hide();
+      if (!event.relatedTarget && event.pointerType === "mouse") hide();
     },
     { capture: true, passive: true },
   );
