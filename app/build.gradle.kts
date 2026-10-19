@@ -44,10 +44,8 @@ abstract class BuildExtension : DefaultTask() {
         manifest["version"] = metadata.first { it.first == "version" }.second
         @Suppress("UNCHECKED_CAST")
         val contentScripts = manifest["content_scripts"] as List<MutableMap<String, Any?>>
-        val (matchedPages, otherPages) = contentScripts
-        val matches = metadata.filter { it.first == "match" }.map { it.second }.distinct()
-        matchedPages["matches"] = matches
-        otherPages["exclude_matches"] = matches
+        contentScripts.single()["matches"] =
+            metadata.filter { it.first == "match" }.map { it.second }.distinct()
         out.resolve("manifest.json")
             .writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifest)))
         out.resolve("userscript.js").writeText("streamChannelerStart(function () {\n$script\n});\n")
