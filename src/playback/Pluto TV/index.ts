@@ -6,7 +6,7 @@ import {
   shouldSkipIntros,
 } from "../../shared";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // TODO: Validate
 const endcard = ".base-container.show endcard-web-component";

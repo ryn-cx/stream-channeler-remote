@@ -15,12 +15,15 @@ import {
   loadChannelEpisodes,
   loadFavoriteChannels,
   loadMorePublicChannels,
+  loadOwnedChannels,
 } from "./site_cache";
 
 const PIXELS_PER_MINUTE = 6;
 const CHANNEL_SEED_KEY = "guideChannelSeed";
 const CHANNEL_COLUMN_PX = 176;
 const FAVORITES_ONLY_KEY = "guideFavoritesOnly";
+const OWNED_ONLY_KEY = "guideOwnedOnly";
+const SCOPE_KEYS = [FAVORITES_ONLY_KEY, OWNED_ONLY_KEY];
 const REFRESH_TIMEOUT_MS = 4000;
 const VIEW_KEY = "guideView";
 const VIEW_SAVE_MS = 250;
@@ -397,38 +400,62 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
     }
     if (cache) renderGuide(cache);
   });
-  const favorites = el("button", "action", "★ Favorites");
-  favorites.type = "button";
-  let favoritesStatus: "idle" | "loading" | "failed" = "idle";
-  const styleFavorites = (): void => {
-    const on = GM_getValue(FAVORITES_ONLY_KEY, false);
-    favorites.className = on ? "action on" : "action";
-    favorites.setAttribute("aria-pressed", String(on));
-    favorites.textContent =
-      favoritesStatus === "loading"
-        ? "★ Loading…"
-        : favoritesStatus === "failed"
-          ? "★ Favorites (couldn't load)"
-          : "★ Favorites";
-  };
-  styleFavorites();
-  favorites.addEventListener("click", () => {
-    const on = !GM_getValue(FAVORITES_ONLY_KEY, false);
-    GM_setValue(FAVORITES_ONLY_KEY, on);
-    favoritesStatus = on ? "loading" : "idle";
-    styleFavorites();
-    if (cache) renderGuide(cache);
-    if (!on) return;
-    loadFavoriteChannels()
-      .then(() => {
-        favoritesStatus = "idle";
-      })
-      .catch((error: unknown) => {
-        log.warn("Couldn't load favorite channels:", error);
-        favoritesStatus = "failed";
-      })
-      .finally(styleFavorites);
-  });
+  const scopeStylers: Array<() => void> = [];
+
+  // TODO: Validate
+  function scopeButton(
+    label: string,
+    key: string,
+    load: () => Promise<void>,
+  ): HTMLButtonElement {
+    const button = el("button", "action", label);
+    button.type = "button";
+    let status: "idle" | "loading" | "failed" = "idle";
+    const style = (): void => {
+      const on = GM_getValue(key, false);
+      button.className = on ? "action on" : "action";
+      button.setAttribute("aria-pressed", String(on));
+      button.textContent =
+        status === "loading"
+          ? `${label} (loading…)`
+          : status === "failed"
+            ? `${label} (couldn't load)`
+            : label;
+    };
+    scopeStylers.push(style);
+    style();
+    button.addEventListener("click", () => {
+      const on = !GM_getValue(key, false);
+      for (const other of SCOPE_KEYS) GM_setValue(other, false);
+      GM_setValue(key, on);
+      status = on ? "loading" : "idle";
+      for (const restyle of scopeStylers) restyle();
+      if (cache) renderGuide(cache);
+      if (!on) return;
+      load()
+        .then(() => {
+          status = "idle";
+        })
+        .catch((error: unknown) => {
+          log.warn(`Couldn't load ${label} channels:`, error);
+          status = "failed";
+        })
+        .finally(style);
+    });
+    return button;
+  }
+
+  // TODO: Validate
+  function isScoped(): boolean {
+    return SCOPE_KEYS.some((key) => GM_getValue(key, false));
+  }
+
+  const favorites = scopeButton(
+    "★ Favorites",
+    FAVORITES_ONLY_KEY,
+    loadFavoriteChannels,
+  );
+  const owned = scopeButton("Owned", OWNED_ONLY_KEY, loadOwnedChannels);
   const close = el("button", "action", "Close");
   close.type = "button";
   close.addEventListener("click", options.onClose);
@@ -542,9 +569,7 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
     pageUp.disabled = content.scrollTop <= 0;
     pageDown.disabled =
       atBottom &&
-      (GM_getValue(FAVORITES_ONLY_KEY, false) ||
-        moreStatus === "loading" ||
-        moreStatus === "done");
+      (isScoped() || moreStatus === "loading" || moreStatus === "done");
     hTrack.style.visibility = max > 0 ? "visible" : "hidden";
     pageLeft.disabled = max <= 0;
     pageRight.disabled = max <= 0;
@@ -572,11 +597,7 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
   // TODO: Validate
   function pageVertically(direction: number): void {
     const maxTop = content.scrollHeight - content.clientHeight;
-    if (
-      direction > 0 &&
-      content.scrollTop >= maxTop - 1 &&
-      !GM_getValue(FAVORITES_ONLY_KEY, false)
-    ) {
+    if (direction > 0 && content.scrollTop >= maxTop - 1 && !isScoped()) {
       loadMoreChannels();
       return;
     }
@@ -628,7 +649,7 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
       "bar",
       el("h1", undefined, "Stream Channeler DVR", updated),
       el("div", "filters", orderSelect, search),
-      el("div", "actions", favorites, reload, close),
+      el("div", "actions", favorites, owned, reload, close),
     ),
     content,
     hbar,
@@ -780,12 +801,19 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
   }
 
   // TODO: Validate
-  function renderGuide({ channels, favoriteIds, fetchedAt }: GuideCache): void {
+  function renderGuide({
+    channels,
+    favoriteIds,
+    ownedIds,
+    fetchedAt,
+  }: GuideCache): void {
     buttons.clear();
     updated.textContent = `Updated ${slotTime(new Date(fetchedAt))}`;
     const windowStart = windowStartAt(fetchedAt);
     const favoriteSet = new Set(favoriteIds ?? []);
     const favoritesOnly = GM_getValue(FAVORITES_ONLY_KEY, false);
+    const ownedSet = new Set(ownedIds ?? []);
+    const ownedOnly = GM_getValue(OWNED_ONLY_KEY, false);
     const order = GM_getValue<string>(CHANNEL_ORDER_KEY, "current");
     orderSelect.value = order;
     const seed = GM_getValue(CHANNEL_SEED_KEY, 0);
@@ -797,6 +825,7 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
         : channels;
     const rows = ordered
       .filter((channel) => !favoritesOnly || favoriteSet.has(channel.id))
+      .filter((channel) => !ownedOnly || ownedSet.has(channel.id))
       .filter(matchesSearch)
       .map((channel) => ({ channel, programs: schedule(channel.programs) }))
       .filter((row) => row.programs.length > 0);
@@ -940,10 +969,12 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
               ? "No channels match your search."
               : favoritesOnly
                 ? "No favorite channels. Sign in on streamchanneler.com to load your favorites."
-                : "No channels with programs yet.",
+                : ownedOnly
+                  ? "No channels of your own. Sign in on streamchanneler.com to load your channels."
+                  : "No channels with programs yet.",
           )
         : grid,
-      !favoritesOnly && loadMore,
+      !favoritesOnly && !ownedOnly && loadMore,
     );
     content.scrollTop = view.top;
     if (grid) grid.scrollLeft = view.left;

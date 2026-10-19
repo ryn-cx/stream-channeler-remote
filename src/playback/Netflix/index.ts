@@ -11,7 +11,7 @@ import {
   shouldSkipIntros,
 } from "../../shared";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 const log = createLogger("Netflix");
 

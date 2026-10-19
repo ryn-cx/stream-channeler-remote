@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // Series are keyed by slug and movies by content id, e.g.
 //   https://www.paramountplus.com/shows/south-park/

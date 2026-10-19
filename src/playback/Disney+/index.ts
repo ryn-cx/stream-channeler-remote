@@ -4,7 +4,7 @@ import {
   shouldSkipIntros,
 } from "../../shared";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // TODO: Validate
 const deepButtons = (root: ParentNode): HTMLButtonElement[] => [

@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // Titles have their own page at /title/80240027, but browsing usually opens the
 // title as a modal over /browse with its id in the query string

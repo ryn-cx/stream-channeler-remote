@@ -13,7 +13,6 @@ import { addMenuCommand, createLogger } from "./shared";
 
 interface Plugin {
   hostnames: string[];
-  matches: string[];
   init: () => void;
 }
 
@@ -22,23 +21,9 @@ function loadPlugins(ctx: __WebpackModuleApi.RequireContext): Plugin[] {
 }
 
 // TODO: Validate
-function matchesPage(patterns: string[]): boolean {
-  return patterns.some((pattern) =>
-    new RegExp(
-      `^${pattern
-        .split("*")
-        .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-        .join(".*")}$`,
-    ).test(location.href),
-  );
-}
-
-// TODO: Validate
 function findPlugin(plugins: Plugin[]): Plugin | undefined {
-  return plugins.find(
-    (p) =>
-      p.hostnames.some((h) => location.hostname.includes(h)) &&
-      matchesPage(p.matches),
+  return plugins.find((p) =>
+    p.hostnames.some((h) => location.hostname.includes(h)),
   );
 }
 

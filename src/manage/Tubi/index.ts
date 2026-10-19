@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // Series and movies are keyed by number, followed by an optional slug, e.g.
 //   https://tubitv.com/series/300006854/scooby-doo-where-are-you

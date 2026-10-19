@@ -7,7 +7,7 @@ export const CHANNEL_ORDER_KEY = "guideChannelOrder";
 export const PREVIEW_LIMIT = 20;
 export const PUBLIC_PAGE_KEY = "guidePublicPage";
 export const PUBLIC_PAGE_SIZE = 20;
-const FAVORITES_LIMIT = 1000;
+const CHANNEL_LIST_LIMIT = 1000;
 const WATCHED_KEY = "watchedEpisodes";
 const WATCHED_LIMIT = 2000;
 
@@ -125,7 +125,7 @@ export async function fetchChannelEpisodes(
 
 // TODO: Validate
 async function fetchChannelList(
-  scope: "public" | "favorites",
+  scope: "public" | "favorites" | "owned",
   offset: number,
   limit: number,
 ): Promise<ApiChannelListItem[]> {
@@ -136,7 +136,7 @@ async function fetchChannelList(
   url.searchParams.set("hide_empty", "true");
   const response = JSON.parse(
     await request("GET", url.href, {
-      auth: scope === "favorites" ? true : "optional",
+      auth: scope === "public" ? "optional" : true,
     }),
   ) as { data?: ApiChannelListItem[] };
   return response.data ?? [];
@@ -151,7 +151,12 @@ export function fetchPublicChannels(
 
 // TODO: Validate
 export function fetchFavoriteChannels(): Promise<ApiChannelListItem[]> {
-  return fetchChannelList("favorites", 0, FAVORITES_LIMIT);
+  return fetchChannelList("favorites", 0, CHANNEL_LIST_LIMIT);
+}
+
+// TODO: Validate
+export function fetchOwnedChannels(): Promise<ApiChannelListItem[]> {
+  return fetchChannelList("owned", 0, CHANNEL_LIST_LIMIT);
 }
 
 // TODO: Validate
@@ -268,6 +273,7 @@ export interface GuideCache {
   channels: DvrApiChannel[];
   favoriteIds?: string[];
   favoritesUpdatedAt?: number;
+  ownedIds?: string[];
   fetchedAt: number;
 }
 

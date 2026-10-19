@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // Title pages, optionally with a region prefix, a decorative name segment and a
 // trailing ref, e.g.

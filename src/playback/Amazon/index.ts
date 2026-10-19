@@ -5,7 +5,7 @@ import {
   shouldSkipIntros,
 } from "../../shared";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 const videoSelector = "#dv-web-player video";
 

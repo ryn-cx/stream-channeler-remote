@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // Show pages look like /videos/metalocalypse; episode pages add the episode slug
 // (/videos/toonami/the-return-episode-1), so require the show slug to end the

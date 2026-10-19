@@ -5,7 +5,7 @@ import {
   shouldSkipCredits,
 } from "../../shared";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // TODO: Validate
 const enterTheatreMode = clickWhenShown(

@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 const ITEM_ID = "[0-9a-f]{24}";
 // Every page sits under a locale segment, e.g.

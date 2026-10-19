@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // TMDB title pages look like /tv/1396-breaking-bad or /movie/550-fight-club, and
 // the slug is optional (/tv/1396 resolves to the same page). Subpages such as

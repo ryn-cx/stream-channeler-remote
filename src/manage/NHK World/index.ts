@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 // NHK World show pages look like /nhkworld/en/shows/100years-midosuji/ where the
 // trailing segment is a slug, while individual episode/video pages use an

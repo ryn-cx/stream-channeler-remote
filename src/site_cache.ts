@@ -9,9 +9,11 @@ import {
   fetchChannelEpisodes,
   fetchDvrChannel,
   fetchFavoriteChannels,
+  fetchOwnedChannels,
   fetchPublicChannels,
   GUIDE_SYNC_REQUEST_KEY,
   type DvrApiProgram,
+  type GuideCache,
   PREVIEW_LIMIT,
   PUBLIC_PAGE_KEY,
   readGuideCache,
@@ -506,6 +508,7 @@ async function syncGuideCache(force = false): Promise<void> {
     channels,
     favoriteIds,
     favoritesUpdatedAt,
+    ownedIds: previous?.ownedIds,
     fetchedAt: Date.now(),
   });
 }
@@ -556,7 +559,7 @@ async function guideChannelFromApi(
 // TODO: Validate
 async function addApiChannels(
   items: ApiChannelListItem[],
-  favoriteIds?: string[],
+  update: Partial<GuideCache> = {},
 ): Promise<number> {
   const known = new Set(readGuideCache()?.channels.map(({ id }) => id) ?? []);
   const watched = readWatched();
@@ -576,7 +579,7 @@ async function addApiChannels(
       ...cache.channels,
       ...added.filter((channel) => !present.has(channel.id)),
     ],
-    ...(favoriteIds && { favoriteIds, favoritesUpdatedAt: Date.now() }),
+    ...update,
   });
   return added.filter((channel) => channel.programs.length > 0).length;
 }
@@ -597,10 +600,16 @@ export async function loadMorePublicChannels(): Promise<number | null> {
 // TODO: Validate
 export async function loadFavoriteChannels(): Promise<void> {
   const items = await fetchFavoriteChannels();
-  await addApiChannels(
-    items,
-    items.map(({ id }) => id),
-  );
+  await addApiChannels(items, {
+    favoriteIds: items.map(({ id }) => id),
+    favoritesUpdatedAt: Date.now(),
+  });
+}
+
+// TODO: Validate
+export async function loadOwnedChannels(): Promise<void> {
+  const items = await fetchOwnedChannels();
+  await addApiChannels(items, { ownedIds: items.map(({ id }) => id) });
 }
 
 // TODO: Validate

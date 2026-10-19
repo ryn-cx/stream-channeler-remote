@@ -8,7 +8,7 @@ import {
   shouldSkipIntros,
 } from "../../shared";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 function waitForWatchPage(): Promise<void> {
   return new Promise((resolve) => {

@@ -3,7 +3,6 @@ declare module "*.less";
 
 declare module "*.matches.cjs" {
   export const hostnames: string[];
-  export const matches: string[];
 }
 
 declare const STREAM_CHANNELER_APP: true | undefined;

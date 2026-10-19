@@ -369,13 +369,17 @@ export function setFakeFullscreen(target: HTMLElement, forGuide = false): void {
     original: new Map(),
     forGuide,
     observer: new MutationObserver(() => {
-      if (
-        target.parentElement === parent &&
-        target.style.getPropertyValue("position") === "fixed"
+      if (!state.target.isConnected) {
+        const replacement = locatePlayer();
+        if (!replacement) return;
+        state.target = replacement;
+      } else if (
+        state.target.parentElement === parent &&
+        state.target.style.getPropertyValue("position") === "fixed"
       ) {
         return;
       }
-      parent = target.parentElement;
+      parent = state.target.parentElement;
       applyFakeFullscreenStyles(state);
     }),
   };
@@ -854,6 +858,13 @@ function findSameSizeWrapper(video: HTMLElement): HTMLElement {
     wrapper = el;
   }
   return wrapper === video ? (video.parentElement ?? video) : wrapper;
+}
+
+// TODO: Validate
+function locatePlayer(): HTMLElement | null {
+  if (!guidePlayer) return null;
+  const video = findVideo(guidePlayer.videoSelector);
+  return video ? findPlayer(video, guidePlayer.playerSelectors) : null;
 }
 
 // TODO: Validate

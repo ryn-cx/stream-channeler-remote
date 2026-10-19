@@ -1,7 +1,7 @@
 // TODO: Validate
 import { initManagePlugin } from "../../manage_plugin";
 
-export { hostnames, matches } from "./matches.cjs";
+export { hostnames } from "./matches.cjs";
 
 function extractChannelId(url: string): string | null {
   // YouTube channels are reachable via several URL forms (/@handle, /channel/UC…,

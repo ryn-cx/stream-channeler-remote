@@ -7,6 +7,8 @@ import { createGuideButton, fitFakeFullscreen, type Logger } from "./shared";
 const MESSAGE_SOURCE = "stream-channeler-dvr";
 const REOPEN_GUIDE_KEY = "reopenGuideAt";
 const REOPEN_GUIDE_MS = 60_000;
+const SETTLE_QUIET_MS = 1000;
+const SETTLE_MAX_MS = 10_000;
 const SITE_GUIDE_LINK_CLASS = "scr-site-guide-link";
 export const DVR_GUIDE_HEIGHT_VH = 65;
 export const DVR_DETAIL_WIDTH_VW = 40;
@@ -123,8 +125,39 @@ function shouldReopenGuide(): boolean {
 }
 
 // TODO: Validate
+function whenPageSettles(run: () => void): void {
+  const start = (): void => {
+    let quietTimer = window.setTimeout(finish, SETTLE_QUIET_MS);
+    const hardTimer = window.setTimeout(finish, SETTLE_MAX_MS);
+    const observer = new MutationObserver(() => {
+      clearTimeout(quietTimer);
+      quietTimer = window.setTimeout(finish, SETTLE_QUIET_MS);
+    });
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+
+    function finish(): void {
+      clearTimeout(quietTimer);
+      clearTimeout(hardTimer);
+      observer.disconnect();
+      run();
+    }
+  };
+  if (document.readyState === "complete") {
+    start();
+  } else {
+    window.addEventListener("load", start, { once: true });
+  }
+}
+
+// TODO: Validate
 export function resumeDvrGuide(log: Logger): void {
   if (window.top !== window || !shouldReopenGuide()) return;
+  whenPageSettles(() => {
+    if (isDvrGuideOpen()) setDvrGuideOpen(true);
+  });
   if (document.documentElement) {
     mountDvrGuide(log);
     return;
