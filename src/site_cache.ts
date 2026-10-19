@@ -1,9 +1,11 @@
 // TODO: Validate
 import {
+  type ApiChannelDetails,
   type ApiChannelListItem,
   type DvrApiChannel,
   apiAssetUrl,
   type EpisodeQuery,
+  fetchChannel,
   fetchChannelEpisodes,
   fetchDvrChannel,
   fetchFavoriteChannels,
@@ -16,21 +18,10 @@ import {
   readWatched,
   writeGuideCache,
 } from "./dvr_api";
-import type { QueueItem } from "./remote";
 
 const SYNC_MS = 2000;
 const PUBLIC_PAGE_ATTEMPTS = 5;
-const SEARCH_KEYS = [
-  "sortBy",
-  "filter",
-  "order",
-  "orderPresetId",
-  "totalTitlesCount",
-  "startedTitlesCount",
-  "newTitlesCount",
-  "limit",
-  "randomSeed",
-];
+const namesRequested = new Set<string>();
 
 type Json = Record<string, unknown>;
 
@@ -110,44 +101,6 @@ function patchPersistedCache(
 }
 
 // TODO: Validate
-function hashKey(queryKey: unknown[]): string {
-  return JSON.stringify(queryKey, (_, value: unknown) =>
-    value !== null && typeof value === "object" && !Array.isArray(value)
-      ? Object.fromEntries(
-          Object.keys(value)
-            .sort()
-            .map((key) => [key, (value as Record<string, unknown>)[key]]),
-        )
-      : value,
-  );
-}
-
-// TODO: Validate
-function parseSearchValue(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-// TODO: Validate
-function episodesQueryHash(channelId: string): string | null {
-  const search = new URLSearchParams(location.search);
-  const params: Record<string, unknown> = {};
-  for (const key of SEARCH_KEYS) {
-    const value = search.get(key);
-    if (value !== null) params[key] = parseSearchValue(value);
-  }
-  if (params.randomSeed === undefined) {
-    const seed = localStorage.getItem(`episode-seed-${channelId}`);
-    if (seed === null) return null;
-    params.randomSeed = Number(seed);
-  }
-  return hashKey(["episodes", channelId, params]);
-}
-
-// TODO: Validate
 async function loadClient(): Promise<PersistedClient | null> {
   const raw = await readPersistedCache();
   if (!raw) return null;
@@ -167,24 +120,6 @@ function isObject(value: unknown): value is Json {
 function episodesOf(data: unknown): Json[] {
   if (!isObject(data) || !Array.isArray(data.episodes)) return [];
   return data.episodes.filter(isObject);
-}
-
-// TODO: Validate
-export async function readChannelQueue(
-  channelId: string,
-): Promise<QueueItem[] | null> {
-  const hash = episodesQueryHash(channelId);
-  if (!hash) return null;
-  const client = await loadClient();
-  const query = client?.clientState.queries.find(
-    (candidate) => candidate.queryHash === hash,
-  );
-  if (!query?.state.data) return null;
-  return episodesOf(query.state.data).flatMap((episode) =>
-    typeof episode.url === "string" && typeof episode.id === "string"
-      ? [{ url: episode.url, episodeId: episode.id }]
-      : [],
-  );
 }
 
 // TODO: Validate
@@ -397,7 +332,12 @@ function newerChannels(
       if (!older) return channel;
       const chosen =
         (older.updatedAt ?? 0) > (channel.updatedAt ?? 0) ? older : channel;
-      return { ...chosen, query: channel.query ?? older.query };
+      return {
+        ...chosen,
+        name: chosen.name ?? channel.name ?? older.name,
+        number: chosen.number ?? channel.number ?? older.number,
+        query: channel.query ?? older.query,
+      };
     }),
     ...previous.filter(
       (channel) => channel.fromApi && !builtIds.has(channel.id),
@@ -661,4 +601,40 @@ export async function loadFavoriteChannels(): Promise<void> {
     items,
     items.map(({ id }) => id),
   );
+}
+
+// TODO: Validate
+export async function fillChannelNames(): Promise<void> {
+  const missing = (readGuideCache()?.channels ?? []).filter(
+    (channel) => !channel.name && !namesRequested.has(channel.id),
+  );
+  if (missing.length === 0) return;
+  for (const channel of missing) namesRequested.add(channel.id);
+  const loaded = await Promise.allSettled(
+    missing.map((channel) => fetchChannel(channel.id)),
+  );
+  const found = new Map<string, ApiChannelDetails>();
+  loaded.forEach((result, index) => {
+    const { id } = missing[index];
+    if (result.status === "fulfilled" && result.value.name) {
+      found.set(id, result.value);
+    } else if (result.status === "rejected") {
+      namesRequested.delete(id);
+    }
+  });
+  const cache = readGuideCache();
+  if (!cache || found.size === 0) return;
+  writeGuideCache({
+    ...cache,
+    channels: cache.channels.map((channel) => {
+      const named = found.get(channel.id);
+      return named && !channel.name
+        ? {
+            ...channel,
+            name: named.name,
+            number: channel.number ?? named.channel_number,
+          }
+        : channel;
+    }),
+  });
 }

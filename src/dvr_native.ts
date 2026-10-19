@@ -11,6 +11,7 @@ import {
 } from "./dvr_api";
 import type { Logger } from "./shared";
 import {
+  fillChannelNames,
   loadChannelEpisodes,
   loadFavoriteChannels,
   loadMorePublicChannels,
@@ -21,6 +22,8 @@ const CHANNEL_SEED_KEY = "guideChannelSeed";
 const CHANNEL_COLUMN_PX = 176;
 const FAVORITES_ONLY_KEY = "guideFavoritesOnly";
 const REFRESH_TIMEOUT_MS = 4000;
+const VIEW_KEY = "guideView";
+const VIEW_SAVE_MS = 250;
 const dataUrls = new Map<string, Promise<string>>();
 const GUIDE_CSS = `
 :host { all: initial; }
@@ -226,6 +229,11 @@ interface Program {
   program: DvrApiProgram;
   startMinute: number;
   minutes: number;
+}
+
+interface GuideView {
+  top: number;
+  left: number;
 }
 
 interface Selection {
@@ -504,6 +512,26 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
   const hbar = el("div", "hbar", pageLeft, hTrack, pageRight, pageUp, pageDown);
   hbar.hidden = true;
   let grid: HTMLElement | null = null;
+  let view = GM_getValue<GuideView>(VIEW_KEY, { top: 0, left: 0 });
+  let saveTimer: number | undefined;
+
+  // TODO: Validate
+  function saveView(): void {
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+    GM_setValue(VIEW_KEY, view);
+  }
+
+  // TODO: Validate
+  function rememberView(): void {
+    view = { top: content.scrollTop, left: grid?.scrollLeft ?? view.left };
+    clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(saveView, VIEW_SAVE_MS);
+  }
+
+  window.addEventListener("pagehide", () => {
+    if (saveTimer !== undefined) saveView();
+  });
 
   // TODO: Validate
   function updateScrollbar(): void {
@@ -561,6 +589,7 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
   pageUp.addEventListener("click", () => pageVertically(-1));
   pageDown.addEventListener("click", () => pageVertically(1));
   content.addEventListener("scroll", updateScrollbar, { passive: true });
+  content.addEventListener("scroll", rememberView, { passive: true });
   pageLeft.addEventListener("click", () => pageBy(-1));
   pageRight.addEventListener("click", () => pageBy(1));
   hTrack.addEventListener("pointerdown", (event) => {
@@ -621,6 +650,7 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
   const failedChannels = new Map<string, "more" | "refresh">();
 
   search.addEventListener("input", () => {
+    view = { ...view, top: 0 };
     if (cache) renderGuide(cache);
   });
 
@@ -896,6 +926,7 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
 
     grid = rows.length === 0 ? null : el("div", "grid", inner);
     grid?.addEventListener("scroll", updateScrollbar, { passive: true });
+    grid?.addEventListener("scroll", rememberView, { passive: true });
     content.replaceChildren(
       !grid
         ? message(
@@ -908,6 +939,8 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
         : grid,
       !favoritesOnly && loadMore,
     );
+    content.scrollTop = view.top;
+    if (grid) grid.scrollLeft = view.left;
     updateScrollbar();
 
     selection = null;
@@ -935,11 +968,16 @@ export function createNativeGuide(options: NativeGuideOptions): NativeGuide {
       return;
     }
     renderGuide(cache);
+    fillChannelNames().catch((error: unknown) =>
+      log.warn("Couldn't load channel names:", error),
+    );
   }
 
   return {
     setOpen(next: boolean): void {
-      if (!host.isConnected) document.body.appendChild(host);
+      if (!host.isConnected) {
+        (document.body ?? document.documentElement).appendChild(host);
+      }
       open = next;
       host.style.display = next ? "block" : "none";
       if (next) render();

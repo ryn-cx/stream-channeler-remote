@@ -4,13 +4,12 @@ import {
   bridgeDvrPage,
   mountSiteGuideLink,
   openDvrGuide,
+  resumeDvrGuide,
   storeDvrToken,
 } from "./dvr";
-import { initRemoteButton } from "./remote_button";
 import { startGuideSync } from "./site_cache";
 import { openSettingsPanel } from "./settings_panel";
-import { ALWAYS_SHOW_GUIDE_KEY } from "./remote";
-import { addMenuCommand, createLogger, mountGuideControls } from "./shared";
+import { addMenuCommand, createLogger } from "./shared";
 
 interface Plugin {
   hostnames: string[];
@@ -57,29 +56,32 @@ if (window.top === window) {
   addMenuCommand("settings", "Settings", openSettingsPanel);
 }
 
-const isApp = typeof STREAM_CHANNELER_APP !== "undefined";
-const isStreamChanneler = location.hostname.includes("streamchanneler.com");
-
-if (playbackPlugin) {
-  playbackPlugin.init();
-} else if (
-  isApp &&
-  !isStreamChanneler &&
-  window.top === window &&
-  GM_getValue(ALWAYS_SHOW_GUIDE_KEY, true)
-) {
-  mountGuideControls(createLogger("Guide"));
-}
-if (managePlugin && !isApp) managePlugin.init();
-
-if (isStreamChanneler) {
-  storeDvrToken();
-  bridgeDvrPage();
-  startGuideSync();
-  initRemoteButton();
-  if (!isApp) initManage();
-  mountSiteGuideLink(createLogger("Guide"));
-  if (window.top === window && location.hash === "#guide") {
-    openDvrGuide(createLogger("Guide"));
+// TODO: Validate
+function onDomReady(run: () => void): void {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
   }
 }
+
+onDomReady(() => {
+  const isApp = typeof STREAM_CHANNELER_APP !== "undefined";
+  const isStreamChanneler = location.hostname.includes("streamchanneler.com");
+
+  if (playbackPlugin) playbackPlugin.init();
+  if (managePlugin && !isApp) managePlugin.init();
+
+  if (isStreamChanneler) {
+    storeDvrToken();
+    bridgeDvrPage();
+    startGuideSync();
+    if (!isApp) initManage();
+    mountSiteGuideLink(createLogger("Guide"));
+    if (window.top === window && location.hash === "#guide") {
+      openDvrGuide(createLogger("Guide"));
+    }
+  }
+});
+
+resumeDvrGuide(createLogger("Guide"));

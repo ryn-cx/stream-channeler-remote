@@ -39,5 +39,5 @@ module.exports = {
     "GM_xmlhttpRequest",
   ],
   connect: ["api.streamchanneler.com", "*"],
-  "run-at": "document-end",
+  "run-at": "document-start",
 };

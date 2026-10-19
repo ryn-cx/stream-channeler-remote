@@ -2,7 +2,7 @@
 import { DVR_TOKEN_KEY as TOKEN_KEY } from "./dvr_api";
 import { createNativeGuide, type NativeGuide } from "./dvr_native";
 import { type DvrProgram, loadState, send } from "./remote";
-import { fitFakeFullscreen, type Logger } from "./shared";
+import { createGuideButton, fitFakeFullscreen, type Logger } from "./shared";
 
 const MESSAGE_SOURCE = "stream-channeler-dvr";
 const REOPEN_GUIDE_KEY = "reopenGuideAt";
@@ -117,12 +117,34 @@ export function toggleDvrGuide(): void {
 }
 
 // TODO: Validate
+function shouldReopenGuide(): boolean {
+  const reopenAt = GM_getValue<number>(REOPEN_GUIDE_KEY, 0);
+  return reopenAt > 0 && Date.now() - reopenAt < REOPEN_GUIDE_MS;
+}
+
+// TODO: Validate
+export function resumeDvrGuide(log: Logger): void {
+  if (window.top !== window || !shouldReopenGuide()) return;
+  if (document.documentElement) {
+    mountDvrGuide(log);
+    return;
+  }
+  const observer = new MutationObserver(() => {
+    if (!document.documentElement) return;
+    observer.disconnect();
+    mountDvrGuide(log);
+  });
+  observer.observe(document, { childList: true });
+}
+
+// TODO: Validate
 export function mountDvrGuide(log: Logger): void {
   ensureGuide(log);
-  const reopenAt = GM_getValue<number>(REOPEN_GUIDE_KEY, 0);
-  if (reopenAt && Date.now() - reopenAt < REOPEN_GUIDE_MS) {
+  if (shouldReopenGuide()) {
     GM_deleteValue(REOPEN_GUIDE_KEY);
     setDvrGuideOpen(true);
+  } else if (isDvrGuideOpen()) {
+    fitFakeFullscreen();
   }
   if (shortcutAdded) return;
   shortcutAdded = true;
@@ -160,12 +182,8 @@ export function mountSiteGuideLink(log: Logger): void {
         if (about.parentElement?.querySelector(`.${SITE_GUIDE_LINK_CLASS}`)) {
           return;
         }
-        const link = document.createElement("button");
-        link.type = "button";
-        link.className = `text-sm transition-colors hover:text-foreground text-muted-foreground font-medium ${SITE_GUIDE_LINK_CLASS}`;
-        link.style.cursor = "pointer";
-        link.textContent = "Guide";
-        link.addEventListener("click", toggleDvrGuide);
+        const link = createGuideButton(log);
+        link.classList.add(SITE_GUIDE_LINK_CLASS);
         about.after(link);
       });
   };

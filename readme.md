@@ -9,11 +9,11 @@ A companion UserScript for [Stream Channeler](https://streamchanneler.com) that 
 
 ## Usage
 
-1. Open a channel on [streamchanneler.com](https://streamchanneler.com)
-2. Click **Start Remote**
+1. Open [streamchanneler.com](https://streamchanneler.com) and click **Guide** in the top bar
+2. Pick a program
 3. Episodes will open, play, and advance automatically
 
-Episodes play one after another in a single tab, and keep going after you close the channel page. Video pages are only touched when the script opened them, either from the remote, a custom channel or a pick in the guide. Those tabs get the overlay buttons, intro/credits skipping and end-of-episode handling, plus fullscreen and autoplay when the page loads, including after a reload. Tabs you open yourself are left alone, apart from the **Guide** button (see [Stream Channeler DVR](#stream-channeler-dvr)).
+Episodes play one after another in a single tab, and keep going after you close the channel page. Video pages are only touched when the script opened them, either from a custom channel or a pick in the guide. Those tabs get the overlay buttons, intro/credits skipping and end-of-episode handling, plus fullscreen and autoplay when the page loads, including after a reload. Tabs you open yourself are left alone, apart from the **Guide** button (see [Stream Channeler DVR](#stream-channeler-dvr)).
 
 ### Settings
 
@@ -57,4 +57,4 @@ While a program plays, press **G** or click **Guide** to bring up the Stream Cha
 
 The guide is built from the data Stream Channeler keeps in your browser, so it shows the channels you have opened on streamchanneler.com. Keep a streamchanneler.com tab open to keep it current; click **Refresh** in the guide to pick up the latest copy. Type in the search box to filter channels by name or number, and click **★ Favorites** to show only your favorite channels. The dropdown left of the search box picks the channel order: **Current sort** lists channels by number, and **Random** shuffles them (switching to **Random** again gives a new shuffle). Each channel starts with its first 20 episodes. Under a channel's name, click **More** to load the rest, or **Refresh** to reload that channel's episodes. While the guide is open, the video shrinks to the top right and the details of the program you hover over appear beside it.
 
-Picking a program in the guide switches to Stream Channeler DVR, which plays programs from the guide's channels like a TV: when a program ends, the next program on the same channel plays in the same tab. If the remote was running, it stops so the two don't fight over playback.
+Picking a program in the guide switches to Stream Channeler DVR, which plays programs from the guide's channels like a TV: when a program ends, the next program on the same channel plays in the same tab.
