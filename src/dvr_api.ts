@@ -38,6 +38,12 @@ export interface DvrApiChannel {
   fromApi?: boolean;
 }
 
+export interface ApiChannelDetails {
+  id: string;
+  name: string | null;
+  channel_number: number | null;
+}
+
 export interface ApiChannelListItem {
   id: string;
   name: string | null;
@@ -146,6 +152,17 @@ export function fetchPublicChannels(
 // TODO: Validate
 export function fetchFavoriteChannels(): Promise<ApiChannelListItem[]> {
   return fetchChannelList("favorites", 0, FAVORITES_LIMIT);
+}
+
+// TODO: Validate
+export async function fetchChannel(
+  channelId: string,
+): Promise<ApiChannelDetails> {
+  return JSON.parse(
+    await request("GET", apiUrl(`/channels/${encodeURIComponent(channelId)}`), {
+      auth: "optional",
+    }),
+  ) as ApiChannelDetails;
 }
 
 // TODO: Validate

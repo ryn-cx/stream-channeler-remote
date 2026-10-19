@@ -65,15 +65,7 @@ export type Request =
   | { type: "tab:previous"; reason: string }
   | { type: "tab:stop" }
   | { type: "tab:resume" }
-  | {
-      type: "remote:start";
-      channelPath: string;
-      queue: QueueItem[];
-      index: number;
-    }
   | { type: "remote:stop" }
-  | { type: "remote:setIndex"; index: number }
-  | { type: "remote:sync"; channelPath: string; queue: QueueItem[] }
   | { type: "custom:start"; urls: string[] }
   | { type: "dvr:play"; program: DvrProgram };
 
@@ -390,38 +382,9 @@ async function handle(request: Request): Promise<unknown> {
       state.stopped = false;
       break;
 
-    case "remote:start":
-      state.mode = "remote";
-      state.queue = request.queue;
-      state.index = request.index;
-      state.channelPath = request.channelPath;
-      await playCurrent(state);
-      break;
-
     case "remote:stop":
       state.stopped = true;
       break;
-
-    case "remote:setIndex":
-      state.index = Math.max(0, Math.min(request.index, state.queue.length));
-      break;
-
-    case "remote:sync": {
-      if (state.mode !== "remote" || state.channelPath !== request.channelPath)
-        return null;
-      const current = state.queue[state.index];
-      const matched = current
-        ? request.queue.findIndex((item) =>
-            current.episodeId
-              ? item.episodeId === current.episodeId
-              : item.url === current.url,
-          )
-        : -1;
-      state.queue = request.queue;
-      state.index =
-        matched >= 0 ? matched : Math.min(state.index, request.queue.length);
-      break;
-    }
 
     case "custom:start":
       state.mode = "custom";

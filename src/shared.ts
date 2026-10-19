@@ -614,7 +614,7 @@ export function mountPlayerControls(log: Logger): void {
 }
 
 // TODO: Validate
-export function mountGuideControls(log: Logger): void {
+function mountGuideControls(log: Logger): void {
   if (document.getElementById("stream-channeler-controls")) return;
 
   const container = createControlsContainer();
@@ -633,7 +633,7 @@ function createControlsContainer(): HTMLDivElement {
 }
 
 // TODO: Validate
-function createGuideButton(log: Logger): HTMLButtonElement {
+export function createGuideButton(log: Logger): HTMLButtonElement {
   mountDvrGuide(log);
   return createOverlayButton(
     document,
